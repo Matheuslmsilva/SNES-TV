@@ -1112,7 +1112,17 @@
   STICK[BTN.UP] = "a1-"; STICK[BTN.DOWN] = "a1+"; STICK[BTN.LEFT] = "a0-"; STICK[BTN.RIGHT] = "a0+";
   var SNES_BTNS = [BTN.B, BTN.Y, BTN.SELECT, BTN.START, BTN.UP, BTN.DOWN, BTN.LEFT, BTN.RIGHT, BTN.A, BTN.X, BTN.L, BTN.R];
 
+  // Xbox: fabricante 045e (Microsoft) / XInput · PlayStation: 054c (Sony) / DualShock / DualSense
+  function padType(p) {
+    var id = String(p && p.id || "");
+    if (/xbox|xinput|045e/i.test(id)) return "xbox";
+    if (/054c|dualshock|dualsense|playstation|ps[345]|wireless controller/i.test(id)) return "ps";
+    return "generic";
+  }
   function padName(p) {
+    var t = padType(p);
+    if (t === "xbox") return "Controle Xbox";
+    if (t === "ps") return /dualsense|0ce6|ps5/i.test(p.id) ? "Controle PS5" : "Controle PlayStation";
     var n = (p.id || "").replace(/\s*\([^)]*(STANDARD GAMEPAD|Vendor:)[^)]*\)\s*$/i, "")
       .replace(/^[0-9a-f]{4}-[0-9a-f]{4}-/i, "").replace(/\s+/g, " ").trim();
     return n || "Joystick";
@@ -1146,7 +1156,23 @@
     var m = map || STD_MAP;
     for (k in m) if (tokenOn(p, m[k])) out[k] = true;
     if (!map) {
-      for (k in STICK) if (tokenOn(p, STICK[k])) out[k] = true;
+      // analógico esquerdo → direcional (zona morta de 40%, diagonais incluídas)
+      var ax = p.axes[0] || 0, ay = p.axes[1] || 0;
+      if (Math.sqrt(ax * ax + ay * ay) > 0.45) {
+        if (ax < -0.4) out[BTN.LEFT] = true; if (ax > 0.4) out[BTN.RIGHT] = true;
+        if (ay < -0.4) out[BTN.UP] = true; if (ay > 0.4) out[BTN.DOWN] = true;
+      }
+      // controles "não padrão" (alguns PS4/genéricos por Bluetooth): direcional num eixo "hat"
+      if (p.mapping !== "standard" && p.axes.length > 9) {
+        var h = p.axes[9];
+        if (h > -1.05 && h < 1.05) {
+          var dir = Math.round((h + 1) * 3.5);   // 0=↑ 1=↗ 2=→ 3=↘ 4=↓ 5=↙ 6=← 7=↖
+          if (dir === 7 || dir === 0 || dir === 1) out[BTN.UP] = true;
+          if (dir >= 1 && dir <= 3) out[BTN.RIGHT] = true;
+          if (dir >= 3 && dir <= 5) out[BTN.DOWN] = true;
+          if (dir >= 5 && dir <= 7) out[BTN.LEFT] = true;
+        }
+      }
       if (tokenOn(p, "b7")) out.turbo = true;   // gatilho direito (RT/R2/ZR)
       if (tokenOn(p, "b16")) out.menu = true;   // botão central (Xbox/PS/Home)
     }
@@ -1195,7 +1221,10 @@
       if (!now[k]) { changed = true; toast("Joystick desconectado: " + knownPads[k], 2400); }
     });
     knownPads = now;
-    if (changed || state.padBadgeDirty) { updatePadBadge(pads); state.padBadgeDirty = false; }
+    if (changed || state.padBadgeDirty) {
+      updatePadBadge(pads); state.padBadgeDirty = false;
+      if (changed && state.view === "game" && state.current) buildSideHelp(state.current, LITE ? LITE.rom : null);
+    }
   }
 
   // botões enviados ao emulador, por jogador
@@ -1238,7 +1267,15 @@
         });
         for (var si = 0; si < states.length; si++) if (!states[si]) states[si] = {};
         states.forEach(function (st) { for (var k in st) any[k] = true; });
-        var hit = function (k) { return any[k] && !padPrev[k]; };
+        var now = performance.now();
+        var hit = function (k) {
+          if (!any[k]) return false;
+          if (!padPrev[k]) { state.rep = state.rep || {}; state.rep[k] = now + 420; return true; }
+          // segurando uma direção: repete a cada 130 ms (só na navegação)
+          if ((k === BTN.UP || k === BTN.DOWN || k === BTN.LEFT || k === BTN.RIGHT) && state.view !== "game" &&
+              state.rep && state.rep[k] && now >= state.rep[k]) { state.rep[k] = now + 130; return true; }
+          return false;
+        };
         var up = hit(BTN.UP), down = hit(BTN.DOWN), left = hit(BTN.LEFT), right = hit(BTN.RIGHT);
         var ok = hit(BTN.B) || hit(BTN.A) || hit(BTN.START), back = hit(BTN.Y);
 
@@ -2452,6 +2489,15 @@
     ["Z", "B"], ["X", "A"], ["A", "Y"], ["S", "X"], ["Q", "L"], ["W", "R"], ["Enter", "Start"], ["Shift", "Select"], ["Setas", "Direcional"], ["Esc", "Menu do jogo"]
   ];
 
+  var XBOX_ROWS = [
+    ["A", "B"], ["B", "A"], ["X", "Y"], ["Y", "X"], ["LB", "L"], ["RB", "R"], ["☰ Menu", "Start"], ["⧉ Exibir", "Select"],
+    ["Analógico", "Direcional"], ["RT (segurar)", "Turbo"], ["Botão Xbox", "Menu do jogo"]
+  ];
+  var PS_ROWS = [
+    ["✕", "B"], ["○", "A"], ["□", "Y"], ["△", "X"], ["L1", "L"], ["R1", "R"], ["OPTIONS", "Start"], ["SHARE", "Select"],
+    ["Analógico", "Direcional"], ["R2 (segurar)", "Turbo"], ["Botão PS", "Menu do jogo"]
+  ];
+
   function buildSideHelp(g, rom) {
     var key = helpKeyFor(g, rom), h = key && GAME_HELP[key] ? GAME_HELP[key] : GENERIC_HELP;
     var L = $("side-left"), R = $("side-right");
@@ -2466,16 +2512,23 @@
       lis[i].querySelector("em").textContent = r[1];
     });
 
-    var rows = TV_LIKE ? REMOTE_ROWS : PC_ROWS;
-    var html2 = '<div class="side-h">' + (TV_LIKE ? "No controle da TV" : "No teclado") + '</div><ul class="side-list remote">';
+    var pads = connectedPads(), pt = pads.length ? padType(pads[0]) : null;
+    var rows = pt === "xbox" ? XBOX_ROWS : pt === "ps" ? PS_ROWS : TV_LIKE ? REMOTE_ROWS : PC_ROWS;
+    var head = pt === "xbox" ? "No controle Xbox" : pt === "ps" ? "No controle PlayStation" : TV_LIKE ? "No controle da TV" : "No teclado";
+    var html2 = '<div class="side-h">' + head + '</div><ul class="side-list remote">';
     rows.forEach(function () { html2 += "<li><b></b><span></span></li>"; });
-    html2 += '</ul><div class="side-note">Joystick: os botões ficam na mesma posição do controle do SNES. Select + Start = menu.</div>';
+    html2 += '</ul><div class="side-note">' + (pt ? "Os botões seguem a posição do controle do SNES. O analógico esquerdo também anda." :
+      "Joystick: os botões ficam na mesma posição do controle do SNES. Select + Start = menu.") + '</div>';
     R.innerHTML = html2;
     var lis2 = R.querySelectorAll("li");
     rows.forEach(function (r, i) {
-      lis2[i].querySelector("b").textContent = r[0];
-      lis2[i].querySelector("span").innerHTML = r[1].length <= 6 && r[1] !== "Menu" ? btnChip(r[1] === "Direcional" ? "dpad" : r[1]) : "";
-      if (r[1] === "Direcional" || r[1] === "Menu do jogo") lis2[i].querySelector("span").innerHTML += "<small>" + r[1] + "</small>";
+      var b = lis2[i].querySelector("b");
+      b.textContent = r[0];
+      if (pt === "ps" && /^[✕○□△]$/.test(r[0])) b.className = "ps-sym ps-" + ({ "✕": "x", "○": "o", "□": "s", "△": "t" })[r[0]];
+      if (pt === "xbox" && /^[ABXY]$/.test(r[0])) b.className = "xb-sym xb-" + r[0].toLowerCase();
+      var span = lis2[i].querySelector("span");
+      span.innerHTML = /^(A|B|X|Y|L|R|Start|Select)$/.test(r[1]) ? btnChip(r[1]) : r[1] === "Direcional" ? btnChip("dpad") : "";
+      if (r[1] === "Direcional" || r[1] === "Menu do jogo" || r[1] === "Turbo") span.innerHTML += "<small>" + r[1] + "</small>";
     });
     fitPlayer();
   }

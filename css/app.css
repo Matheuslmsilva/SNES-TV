@@ -395,3 +395,12 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 .chip.pill { padding: 0 0.5rem; height: 1.4rem; line-height: 1.4rem; border-radius: 0.7rem; background: #3a3546; font-size: 0.7rem; letter-spacing: 0.04em; }
 .chip.dpad { width: 1.7rem; height: 1.7rem; line-height: 1.7rem; border-radius: 0.3rem; background: #3a3546; font-size: 1rem; }
 .side-note { margin-top: 1rem; font-size: 0.8rem; color: #9a94a8; }
+
+/* símbolos dos controles Xbox / PlayStation nas dicas */
+.side-list.remote li b.ps-sym, .side-list.remote li b.xb-sym { -webkit-flex: none; flex: none; width: 1.9rem; height: 1.9rem; line-height: 1.9rem;
+  border-radius: 50%; text-align: center; background: #26222e; font-weight: 800; margin-right: auto; }
+.side-list.remote li b.ps-x { color: #7fa7ff; } .side-list.remote li b.ps-o { color: #ff7a7a; }
+.side-list.remote li b.ps-s { color: #ff8fd8; } .side-list.remote li b.ps-t { color: #5fe0b8; }
+.side-list.remote li b.xb-y { color: #222; }
+.xb-a { color: #fff; background: #3e9a3a !important; } .xb-b { color: #fff; background: #c8352f !important; }
+.xb-x { color: #fff; background: #2f6fd0 !important; } .xb-y { color: #222; background: #e8b71f !important; }
