@@ -72,8 +72,12 @@
       this.canvas.width = w; this.canvas.height = h;
       this.img = this.ctx.createImageData(w, h);
     }
-    var ptr = M._s_video();
-    this.img.data.set(new Uint8ClampedArray(M.HEAPU8.buffer, ptr, w * h * 4));
+    var ptr = M._s_video(), buf = M.HEAPU8.buffer, len = w * h * 4;
+    if (this.vBuf !== buf || this.vPtr !== ptr || this.vLen !== len) {
+      this.vView = new Uint8ClampedArray(buf, ptr, len);
+      this.vBuf = buf; this.vPtr = ptr; this.vLen = len;
+    }
+    this.img.data.set(this.vView);
     this.ctx.putImageData(this.img, 0, 0);
     this.drawn = (this.drawn || 0) + 1;
   };
@@ -115,8 +119,12 @@
     if (!this.ring || this.turbo) return;
     var M = this.M, n = M._s_audio_count();
     if (!n) return;
-    var src = new Int16Array(M.HEAP16.buffer, M._s_audio(), n * 2);
-    var step = this.step, pos = this.frac, max = this.rSize - 1;
+    var abuf = M.HEAP16.buffer, aptr = M._s_audio();
+    if (this.aBuf !== abuf || this.aPtr !== aptr) { this.aView = new Int16Array(abuf, aptr, 8192 * 2); this.aBuf = abuf; this.aPtr = aptr; }
+    var src = this.aView;
+    var dev = (this.rFill - this.target) / this.target;           // -1 .. +n
+    if (dev > 1) dev = 1; if (dev < -1) dev = -1;
+    var step = this.step * (1 + 0.005 * dev), pos = this.frac, max = this.rSize - 1;
     while (pos < n - 1) {
       var i = pos | 0, f = pos - i;
       var l = src[i * 2] + (src[i * 2 + 2] - src[i * 2]) * f;
@@ -143,22 +151,37 @@
     var dt = now - this.last; this.last = now;
     if (this.paused || !this.started) return;
     if (dt > 250) dt = 250;
-    var frameMs = 1000 / this.fps / (this.turbo ? 3 : 1);
-    this.acc += dt;
-    var ran = 0, maxRun = this.turbo ? 6 : 4, M = this.M;
+    var M = this.M, frameMs = 1000 / this.fps;
     var occ = this.ring ? Math.min(100, Math.round(this.rFill / this.target * 50)) : 50;
+
+    // mede a frequência real da tela (média móvel)
+    this.avg = this.avg ? this.avg * 0.95 + dt * 0.05 : dt;
+    var hz = 1000 / this.avg;
+    var vsync = Math.abs(hz - this.fps) < 1.5;    // tela a ~60 Hz: 1 quadro por atualização
+
+    var n;
+    if (this.turbo) {
+      n = 3;
+    } else if (vsync) {
+      // quadros que a tela perdeu desde a última atualização (normalmente 1)
+      n = Math.round(dt / (1000 / hz));
+      if (n < 1) n = 1; if (n > 4) n = 4;
+      this.acc = 0;
+    } else {
+      this.acc += dt;
+      n = Math.floor(this.acc / frameMs);
+      if (n > 4) { n = 4; this.acc = 0; } else this.acc -= n * frameMs;
+    }
+
     var drew = false;
-    while (this.acc >= frameMs && ran < maxRun) {
-      // atrasado (mais de 1 quadro na fila) → o núcleo pula o desenho deste quadro
-      var behind = this.acc >= frameMs * 2 || (this.ring && this.rFill < this.target / 3);
-      M._s_run(occ, behind ? 1 : 0);
+    for (var i = 0; i < n; i++) {
+      // só desenha o último quadro; os de recuperação pulam o desenho
+      var skip = i < n - 1;
+      M._s_run(occ, skip ? 1 : 0);
       this.frames++;
       if (M._s_video_new()) drew = true;
       this.pushAudio();
-      this.acc -= frameMs;
-      ran++;
     }
-    if (ran === maxRun) this.acc = 0;     // não dá para alcançar: desacelera em vez de travar
     if (drew) this.draw();
   };
 

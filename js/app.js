@@ -348,6 +348,7 @@
     // navegador da TV não abre arquivos; no PC/celular o seletor funciona
     var tvBrowser = /SMART-TV|Tizen|Web0S|NetCast|HbbTV/i.test(navigator.userAgent);
     if (!IS_TIZEN && !tvBrowser) items.unshift({ action: "open", title: "Abrir arquivos…", meta: "Escolher .sfc / .smc / .zip" });
+    items.unshift({ action: "pair", title: "Celular como controle", meta: ctrlCount() ? ctrlCount() + " conectado(s)" : "Ler QR Code no celular" });
     items.unshift({ action: "phone", title: "Adicionar pelo celular", meta: "Ler QR Code e enviar jogos" });
     $("empty").hidden = items.length > 0;
     grid.hidden = items.length === 0;
@@ -357,7 +358,7 @@
       var el = document.createElement("div");
       el.className = "tile" + (g.action ? " action" : "");
       el.setAttribute("role", "option");
-      var initial = g.action === "phone" ? "QR" : g.action ? "+" : (g.title.match(/[A-Za-z0-9À-ú]/) || ["?"])[0].toUpperCase();
+      var initial = g.action === "pair" ? "PAD" : g.action === "phone" ? "QR" : g.action ? "+" : (g.title.match(/[A-Za-z0-9À-ú]/) || ["?"])[0].toUpperCase();
       var hue = g.action ? 250 : hashHue(g.title);
       var meta = g.action ? g.meta :
         [g.region, fmtSize(g.size), g.source === "usb" ? "USB" : g.source === "pc" ? "PC" : g.source === "local" ? "salvo" : ""].filter(Boolean).join(" · ");
@@ -417,6 +418,7 @@
     if (!g) return;
     if (g.action === "open") { $("file-input").click(); return; }
     if (g.action === "phone") { openPhone(); return; }
+    if (g.action === "pair") { openPair("launcher"); return; }
     startGame(g);
   }
 
@@ -848,6 +850,7 @@
       return;
     }
     if (act === "controls") { openHelp("menu"); return; }
+    if (act === "pair") { openPair("menu"); return; }
     if (act === "exit") return exitGame();
   }
 
@@ -919,6 +922,9 @@
       if (c === K.ENTER || isBack(c)) closeHelp();
     } else if (state.view === "phone") {
       if (isBack(c) || c === K.ENTER) closePhone();
+    } else if (state.view === "pair") {
+      if (isBack(c) || c === K.ENTER) closePair();
+      else if (c === K.RED || c === 82) { stopCtrl(); toast("Celulares desconectados", 2000); closePair(); }
     } else if (state.view === "wizard") {
       if (isBack(c)) closeWizard(false);
       else if (c === K.ENTER) wizardSkip();
@@ -997,6 +1003,12 @@
 
   function updatePadBadge(pads) {
     var el = $("pad-text"), box = $("pad-info");
+    var phones = typeof ctrl !== "undefined" ? ctrlCount() : 0;
+    if (!pads.length && phones) {
+      el.textContent = phones === 1 ? "📱 1 celular como controle" : "📱 " + phones + " celulares como controle";
+      box.classList.add("on");
+      return;
+    }
     if (!pads.length) {
       el.textContent = "Nenhum joystick — conecte por USB ou Bluetooth e aperte um botão";
       box.classList.remove("on");
@@ -1004,7 +1016,7 @@
     }
     el.textContent = pads.slice(0, 4).map(function (p, n) {
       return "J" + (n + 1) + ": " + padName(p) + (customMap(p) ? " ✓" : "");
-    }).join("  ·  ");
+    }).join("  ·  ") + (phones ? "  ·  📱 " + phones : "");
     box.classList.add("on");
   }
 
@@ -1061,6 +1073,12 @@
         wizardPoll(pads);
       } else {
         var states = pads.slice(0, 4).map(readPad), any = {};
+        ctrl.states.forEach(function (st, i) {
+          if (!st) return;
+          var dst = states[i] || (states[i] = {});
+          for (var k in st) dst[k] = true;
+        });
+        for (var si = 0; si < states.length; si++) if (!states[si]) states[si] = {};
         states.forEach(function (st) { for (var k in st) any[k] = true; });
         var hit = function (k) { return any[k] && !padPrev[k]; };
         var up = hit(BTN.UP), down = hit(BTN.DOWN), left = hit(BTN.LEFT), right = hit(BTN.RIGHT);
@@ -1091,6 +1109,8 @@
           if (ok || back) closeHelp();
         } else if (state.view === "phone") {
           if (back || hit(BTN.B) || hit(BTN.A)) closePhone();
+        } else if (state.view === "pair") {
+          if (back) closePair();
         }
         padPrev = any;
       }
@@ -1403,11 +1423,134 @@
   }
 
   // ====================================================================
+  // Celular como controle (QR Code + conexão direta com PeerJS)
+  // ====================================================================
+  var ctrl = { peer: null, conns: [], states: [], code: null, ready: false };
+
+  function ctrlEnabled() { try { return localStorage.getItem("snestv.ctrl") === "1"; } catch (e) { return false; } }
+  function ctrlCode() {
+    var c = null;
+    try { c = localStorage.getItem("snestv.ctrlcode"); } catch (e) {}
+    if (!c || !/^[A-Z2-9]{6}$/.test(c)) {
+      c = newCode();
+      try { localStorage.setItem("snestv.ctrlcode", c); } catch (e) {}
+    }
+    return c;
+  }
+  function ctrlCount() { return ctrl.conns.filter(Boolean).length; }
+
+  function startCtrl() {
+    if (ctrl.peer && !ctrl.peer.destroyed) return Promise.resolve();
+    if (!window.RTCPeerConnection && !window.webkitRTCPeerConnection) {
+      pairStatus("O navegador desta TV não suporta conexão com o celular.", "err");
+      return Promise.resolve();
+    }
+    var libs = (window.Peer || window.peerjs) ? Promise.resolve() : loadScript("lib/peerjs.min.js");
+    return libs.then(function () {
+      var P = window.Peer || window.peerjs.Peer;
+      ctrl.code = ctrlCode();
+      ctrl.ready = false;
+      var peer = new P("snestv-pad-" + ctrl.code);
+      ctrl.peer = peer;
+      peer.on("open", function () { ctrl.ready = true; pairPaint(); });
+      peer.on("connection", ctrlConn);
+      peer.on("error", function (err) {
+        if (err.type === "unavailable-id") {
+          // a sessão anterior (antes de recarregar) ainda está registrada: tenta de novo
+          try { peer.destroy(); } catch (e) {}
+          ctrl.peer = null;
+          pairStatus("Preparando…");
+          setTimeout(function () { if (ctrlEnabled()) startCtrl(); }, 3000);
+          return;
+        }
+        if (/network|server-error|socket/.test(err.type || "")) pairStatus("Sem conexão com a internet. Confira o Wi-Fi da TV.", "err");
+      });
+      peer.on("disconnected", function () {
+        setTimeout(function () { try { if (!peer.destroyed) peer.reconnect(); } catch (e) {} }, 2000);
+      });
+    }, function () { pairStatus("Não consegui carregar os arquivos de conexão.", "err"); });
+  }
+
+  function ctrlConn(conn) {
+    conn.on("open", function () {
+      var slot = ctrl.conns.indexOf(null);
+      if (slot < 0) slot = ctrl.conns.length;
+      if (slot >= 4) { try { conn.close(); } catch (e) {} return; }
+      ctrl.conns[slot] = conn;
+      ctrl.states[slot] = {};
+      try { conn.send({ t: "hi", player: slot + 1 }); } catch (e) {}
+      toast("📱 Celular conectado — jogador " + (slot + 1), 2500);
+      state.padBadgeDirty = true;
+      pairPaint();
+      if (state.view === "pair") setTimeout(function () { if (state.view === "pair") closePair(); }, 1500);
+      conn.on("data", function (d) {
+        if (!d || d.t !== "pad") return;
+        var st = {};
+        for (var b = 0; b < 12; b++) if (d.m & (1 << b)) st[b] = true;
+        if (d.menu) st.menu = true;
+        ctrl.states[slot] = st;
+      });
+      conn.on("close", function () {
+        if (ctrl.conns[slot] !== conn) return;
+        ctrl.conns[slot] = null;
+        ctrl.states[slot] = null;
+        toast("Celular do jogador " + (slot + 1) + " desconectado", 2200);
+        state.padBadgeDirty = true;
+      });
+    });
+  }
+
+  function stopCtrl() {
+    try { localStorage.setItem("snestv.ctrl", "0"); } catch (e) {}
+    ctrl.conns.forEach(function (c) { try { if (c) c.close(); } catch (e) {} });
+    ctrl.conns = []; ctrl.states = [];
+    try { if (ctrl.peer) ctrl.peer.destroy(); } catch (e) {}
+    ctrl.peer = null;
+    state.padBadgeDirty = true;
+  }
+
+  // ---------------- tela do QR Code do controle ----------------
+  function pairStatus(text, kind) {
+    var el = $("pair-status"); if (!el) return;
+    el.textContent = text; el.className = "phone-status " + (kind || "");
+  }
+  function pairPaint() {
+    if ($("pair").hidden) return;
+    var n = ctrlCount();
+    $("pair-count").textContent = n ? (n === 1 ? "1 celular conectado" : n + " celulares conectados") : "";
+    if (!ctrl.ready || !window.qrcode) { pairStatus("Preparando…"); return; }
+    var url = sendUrl(ctrl.code).replace("enviar.html", "controle.html");
+    var qr = qrcode(0, "M"); qr.addData(url); qr.make();
+    $("pair-qr").innerHTML = qr.createSvgTag({ cellSize: 6, margin: 3, scalable: true });
+    $("pair-code").textContent = ctrl.code;
+    $("pair-url").textContent = url.replace(/^https?:\/\//, "").replace(/#.*$/, "") + "  ·  código " + ctrl.code;
+    pairStatus(n ? "Pode conectar outro celular (jogador " + (n + 1) + ")" : "Aguardando o celular…", n ? "ok" : "");
+  }
+  function openPair(from) {
+    state.pairFrom = from;
+    state.view = "pair";
+    $("menu").hidden = true;
+    $("pair").hidden = false;
+    $("pair-qr").innerHTML = "";
+    $("pair-code").textContent = "······";
+    try { localStorage.setItem("snestv.ctrl", "1"); } catch (e) {}
+    var libs = window.qrcode ? Promise.resolve() : loadScript("lib/qrcode.js");
+    libs.then(startCtrl).then(pairPaint);
+  }
+  function closePair() {
+    $("pair").hidden = true;
+    padPrev = {};
+    if (state.pairFrom === "menu") { state.view = "menu"; $("menu").hidden = false; }
+    else state.view = "launcher";
+  }
+
+  // ====================================================================
   // Início
   // ====================================================================
   function init() {
     registerTvKeys();
     showDeviceInfo();
+    if (ctrlEnabled()) startCtrl();
     refresh(true);
     requestAnimationFrame(pollPads);
 

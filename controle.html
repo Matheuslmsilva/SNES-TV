@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1a1720">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Controle SNES TV</title>
+<style>
+  :root {
+    --bg: #1a1720; --body: #cfcbd6; --body2: #b5b0bf; --dark: #2e2a36; --ink: #ece9f2; --muted: #9a94a8;
+    --a: #d6383c; --b: #e8b71f; --x: #3a63c8; --y: #2f9a4e; --ok: #8fe3a5; --err: #ff8f8f;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink);
+    font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; touch-action: none; }
+  [hidden] { display: none !important; }
+
+  .top { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center;
+    padding: max(8px, env(safe-area-inset-top)) 14px 6px; z-index: 5; }
+  .status { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+  .led { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  .status.ok .led { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .status.err .led { background: var(--err); }
+  .status.wait .led { animation: pulse 1s infinite; } @keyframes pulse { 50% { opacity: .3; } }
+  .menu-btn { border: 0; background: var(--dark); color: var(--ink); border-radius: 18px; padding: 8px 16px; font: 700 14px inherit; }
+  .menu-btn.on { background: #6c5fc7; }
+
+  /* controle (paisagem) */
+  .pad { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
+  .shoulder { position: absolute; top: 44px; width: 30%; height: 52px; background: var(--body2); border-radius: 26px;
+    display: flex; align-items: center; justify-content: center; font: 800 20px inherit; color: #4a4553; }
+  .shoulder.l { left: 4%; } .shoulder.r { right: 4%; }
+  .dpad { position: absolute; left: 6%; bottom: 10%; width: min(42vh, 30vw); height: min(42vh, 30vw); }
+  .dpad .d { position: absolute; background: var(--dark); }
+  .dpad .up    { left: 33.3%; top: 0; width: 33.4%; height: 38%; border-radius: 8px 8px 0 0; }
+  .dpad .down  { left: 33.3%; bottom: 0; width: 33.4%; height: 38%; border-radius: 0 0 8px 8px; }
+  .dpad .left  { left: 0; top: 33.3%; width: 38%; height: 33.4%; border-radius: 8px 0 0 8px; }
+  .dpad .right { right: 0; top: 33.3%; width: 38%; height: 33.4%; border-radius: 0 8px 8px 0; }
+  .dpad .hub { left: 33.3%; top: 33.3%; width: 33.4%; height: 33.4%; background: var(--dark); }
+  .face { position: absolute; right: 6%; bottom: 10%; width: min(46vh, 32vw); height: min(46vh, 32vw); }
+  .face .f { position: absolute; width: 36%; height: 36%; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font: 800 22px inherit; color: rgba(255,255,255,.85); box-shadow: inset 0 -4px 0 rgba(0,0,0,.25); }
+  .face .x { left: 32%; top: 0; background: var(--x); }
+  .face .a { right: 0; top: 32%; background: var(--a); }
+  .face .b { left: 32%; bottom: 0; background: var(--b); }
+  .face .y { left: 0; top: 32%; background: var(--y); }
+  .mid { position: absolute; left: 50%; bottom: 16%; transform: translateX(-50%); display: flex; gap: 18px; }
+  .mid .s { width: 74px; height: 30px; border-radius: 15px; background: var(--dark); display: flex; align-items: center; justify-content: center;
+    font: 700 11px inherit; letter-spacing: .08em; color: var(--muted); transform: rotate(-20deg); }
+  .on, .pressed { filter: brightness(1.5); }
+  .dpad .d.pressed, .mid .s.pressed { background: #6c5fc7; filter: none; }
+  .shoulder.pressed { background: #fff; }
+  .face .f.pressed { transform: scale(.92); box-shadow: none; }
+  .player { position: absolute; left: 50%; top: 52px; transform: translateX(-50%); color: var(--muted); font-size: 13px; text-align: center; }
+
+  .rotate { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: none; align-items: center; justify-content: center;
+    text-align: center; padding: 24px; background: var(--bg); z-index: 10; font-size: 18px; }
+  @media (orientation: portrait) { .rotate { display: flex; } }
+
+  .code { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg); z-index: 20; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 12px; padding: 20px; }
+  .code input { font: 700 26px ui-monospace, monospace; letter-spacing: .3em; text-transform: uppercase; width: 220px; text-align: center;
+    background: #120f17; color: var(--ink); border: 1px solid #3a3546; border-radius: 12px; padding: 12px; -webkit-user-select: text; user-select: text; }
+  .code button { border: 0; border-radius: 12px; padding: 14px 28px; background: #6c5fc7; color: #fff; font: 700 17px inherit; }
+</style>
+</head>
+<body>
+<div class="top">
+  <div id="status" class="status wait"><span class="led"></span><span id="status-text">Conectando à TV…</span></div>
+  <button id="menu" class="menu-btn" data-k="menu">MENU</button>
+</div>
+
+<div class="pad" id="pad">
+  <div class="shoulder l" data-k="10">L</div>
+  <div class="shoulder r" data-k="11">R</div>
+  <div class="player" id="player"></div>
+  <div class="dpad">
+    <div class="d up" data-k="4"></div><div class="d down" data-k="5"></div>
+    <div class="d left" data-k="6"></div><div class="d right" data-k="7"></div>
+    <div class="d hub" data-k="hub"></div>
+  </div>
+  <div class="mid"><div class="s" data-k="2">SELECT</div><div class="s" data-k="3">START</div></div>
+  <div class="face">
+    <div class="f x" data-k="9">X</div><div class="f a" data-k="8">A</div>
+    <div class="f b" data-k="0">B</div><div class="f y" data-k="1">Y</div>
+  </div>
+</div>
+
+<div class="rotate">↻ Vire o celular de lado para usar o controle</div>
+
+<form class="code" id="code-form" hidden>
+  <div>Digite o código que aparece na TV</div>
+  <input id="code" maxlength="6" autocomplete="off" autocapitalize="characters">
+  <button type="submit">Conectar</button>
+</form>
+
+<script src="lib/peerjs.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var code = (location.hash || "").replace("#", "").toUpperCase();
+  var peer = null, conn = null, mask = 0, menu = false, retry = null;
+
+  function status(kind, text) { $("status").className = "status " + kind; $("status-text").textContent = text; }
+
+  function send() {
+    if (conn && conn.open) { try { conn.send({ t: "pad", m: mask, menu: menu }); } catch (e) {} }
+  }
+  // reenvia o estado de tempos em tempos (se um pacote se perder, corrige sozinho)
+  setInterval(send, 150);
+
+  // ---------- toque: vários dedos e deslizar entre botões ----------
+  var touches = {};   // id do toque -> lista de teclas
+  function keysAt(x, y) {
+    var el = document.elementFromPoint(x, y);
+    while (el && !el.getAttribute("data-k") && el !== document.body) el = el.parentNode;
+    if (!el || !el.getAttribute) return [];
+    var k = el.getAttribute("data-k");
+    if (!k) return [];
+    if (k === "hub") return [];
+    // diagonais: perto da borda entre duas direções
+    if (/^[4-7]$/.test(k)) {
+      var box = el.parentNode.getBoundingClientRect();
+      var rx = (x - box.left) / box.width, ry = (y - box.top) / box.height, out = [];
+      if (ry < 0.4) out.push("4"); if (ry > 0.6) out.push("5");
+      if (rx < 0.4) out.push("6"); if (rx > 0.6) out.push("7");
+      return out.length ? out : [k];
+    }
+    return [k];
+  }
+  function recompute() {
+    var m = 0, mn = false, all = {};
+    Object.keys(touches).forEach(function (id) {
+      touches[id].forEach(function (k) { all[k] = 1; if (k === "menu") mn = true; else m |= 1 << (+k); });
+    });
+    var els = document.querySelectorAll("[data-k]");
+    for (var i = 0; i < els.length; i++) els[i].classList.toggle("pressed", !!all[els[i].getAttribute("data-k")]);
+    if (m !== mask || mn !== menu) {
+      if ((m & ~mask) && navigator.vibrate) navigator.vibrate(12);
+      mask = m; menu = mn; send();
+    }
+  }
+  function onTouch(e) {
+    if (e.target && e.target.closest && e.target.closest("form")) return;   // deixa digitar o código
+    e.preventDefault();
+    var list = e.changedTouches;
+    for (var i = 0; i < list.length; i++) {
+      var t = list[i];
+      if (e.type === "touchend" || e.type === "touchcancel") delete touches[t.identifier];
+      else touches[t.identifier] = keysAt(t.clientX, t.clientY);
+    }
+    recompute();
+    if (e.type === "touchstart") goFull();
+  }
+  ["touchstart", "touchmove", "touchend", "touchcancel"].forEach(function (ev) {
+    document.addEventListener(ev, onTouch, { passive: false });
+  });
+  // mouse (para testar no PC)
+  var mdown = false;
+  document.addEventListener("mousedown", function (e) { mdown = true; touches.m = keysAt(e.clientX, e.clientY); recompute(); });
+  document.addEventListener("mousemove", function (e) { if (mdown) { touches.m = keysAt(e.clientX, e.clientY); recompute(); } });
+  document.addEventListener("mouseup", function () { mdown = false; delete touches.m; recompute(); });
+
+  function goFull() {
+    var d = document.documentElement;
+    if (document.fullscreenElement || document.webkitFullscreenElement) return;
+    try { (d.requestFullscreen || d.webkitRequestFullscreen).call(d).then(function () {
+      if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(function () {});
+    }).catch(function () {}); } catch (e) {}
+  }
+
+  // ---------- conexão com a TV ----------
+  function connect() {
+    clearTimeout(retry);
+    var P = window.Peer || (window.peerjs && window.peerjs.Peer);
+    if (!P) { status("err", "Erro ao carregar"); return; }
+    if (!peer || peer.destroyed) {
+      peer = new P();
+      peer.on("open", function () { dial(); });
+      peer.on("error", function (err) {
+        if (err.type === "peer-unavailable") status("wait", "Procurando a TV… (abra a tela do QR Code na TV)");
+        else status("err", "Sem internet — tentando de novo");
+        retry = setTimeout(connect, 2500);
+      });
+      peer.on("disconnected", function () { try { peer.reconnect(); } catch (e) {} });
+    } else dial();
+  }
+  function dial() {
+    status("wait", "Conectando à TV…");
+    conn = peer.connect("snestv-pad-" + code, { reliable: true, serialization: "json" });
+    conn.on("open", function () { status("ok", "Conectado"); send(); });
+    conn.on("data", function (d) {
+      if (d && d.t === "hi") $("player").textContent = "Jogador " + d.player;
+    });
+    conn.on("close", function () { status("wait", "Reconectando…"); retry = setTimeout(connect, 2000); });
+    conn.on("error", function () { retry = setTimeout(connect, 2000); });
+  }
+
+  function start(c) {
+    code = (c || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (code.length !== 6) { $("code-form").hidden = false; return; }
+    $("code-form").hidden = true;
+    connect();
+  }
+  $("code-form").addEventListener("submit", function (e) { e.preventDefault(); start($("code").value); });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && (!conn || !conn.open)) connect(); });
+  start(code);
+})();
+</script>
+</body>
+</html>

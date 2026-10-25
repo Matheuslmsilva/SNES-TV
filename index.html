@@ -86,6 +86,7 @@
       <li data-act="perf">Desempenho: <b id="perf-state">velocidade máxima</b></li>
       <li data-act="fps">Mostrar FPS: <b id="fps-state">não</b></li>
       <li data-act="restart">Reiniciar o jogo</li>
+      <li data-act="pair">Celular como controle</li>
       <li data-act="controls">Ver controles</li>
       <li data-act="exit">Sair para a lista de jogos</li>
     </ul>
@@ -152,6 +153,27 @@
       <p id="phone-status" class="phone-status">Preparando…</p>
       <ul id="phone-list" class="phone-list"></ul>
       <p class="muted small"><kbd>VOLTAR</kbd> fechar quando terminar</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CELULAR COMO CONTROLE ============ -->
+<div id="pair" class="overlay" hidden>
+  <div class="panel phone-panel">
+    <div class="phone-qr-box"><div id="pair-qr" class="phone-qr"></div></div>
+    <div class="phone-side">
+      <h2>Celular como controle</h2>
+      <ol class="phone-steps">
+        <li>Aponte a câmera do celular para o QR Code</li>
+        <li>Abra o link e vire o celular de lado</li>
+        <li>Pronto: o celular vira um controle de SNES</li>
+      </ol>
+      <p class="muted small">Sem câmera? Abra <span id="pair-url"></span></p>
+      <div class="phone-code" id="pair-code">······</div>
+      <p id="pair-status" class="phone-status">Preparando…</p>
+      <p id="pair-count" class="muted"></p>
+      <p class="muted small">Até 4 celulares (um por jogador) · o celular se reconecta sozinho ·
+        <kbd class="key-dot c-a"></kbd> desconectar todos · <kbd>VOLTAR</kbd> fechar</p>
     </div>
   </div>
 </div>
