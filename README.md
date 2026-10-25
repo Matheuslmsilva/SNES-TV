@@ -2,7 +2,7 @@
 
 Emulador de Super Nintendo (snes9x em WebAssembly, via [EmulatorJS](https://github.com/EmulatorJS/EmulatorJS)) feito para abrir no navegador da TV Samsung e jogar com o controle remoto ou um joystick USB/Bluetooth.
 
-**Abrir:** https://matheuslmsilva.github.io/snes-tv/
+**Abrir:** https://matheuslmsilva.github.io/SNES-TV/
 
 1. Abra o link no navegador "Internet" da TV.
 2. Escolha **Abrir jogos do pen drive…** e selecione os arquivos `.sfc`, `.smc` ou `.zip`.
