@@ -178,22 +178,24 @@
 
 <!-- ============ CELULAR COMO CONTROLE ============ -->
 <div id="pair" class="overlay" hidden>
-  <div class="panel phone-panel">
-    <div class="phone-qr-box"><div id="pair-qr" class="phone-qr"></div></div>
-    <div class="phone-side">
-      <h2>Celular como controle</h2>
-      <ol class="phone-steps">
-        <li>Aponte a câmera do celular para o QR Code</li>
-        <li>Abra o link e vire o celular de lado</li>
-        <li>Pronto: o celular vira um controle de SNES</li>
-      </ol>
-      <p class="muted small">Sem câmera? Abra <span id="pair-url"></span></p>
-      <div class="phone-code" id="pair-code">······</div>
-      <p id="pair-status" class="phone-status">Preparando…</p>
-      <p id="pair-count" class="muted"></p>
-      <p class="muted small">Até 4 celulares (um por jogador) · o celular se reconecta sozinho ·
-        <kbd class="key-dot c-a"></kbd> desconectar todos · <kbd>VOLTAR</kbd> fechar</p>
+  <div class="panel pair-panel">
+    <h2>Celular como controle</h2>
+    <p class="muted">Cada pessoa aponta a câmera do celular para o QR Code do seu jogador e vira o celular de lado.</p>
+    <div class="pair-slots">
+      <div class="pair-slot p1" id="slot-1">
+        <div class="pair-tag">Jogador 1</div>
+        <div class="phone-qr-box"><div class="phone-qr pair-qr" id="pair-qr-1"></div></div>
+        <div class="pair-st" id="pair-st-1">Aguardando…</div>
+      </div>
+      <div class="pair-slot p2" id="slot-2">
+        <div class="pair-tag">Jogador 2</div>
+        <div class="phone-qr-box"><div class="phone-qr pair-qr" id="pair-qr-2"></div></div>
+        <div class="pair-st" id="pair-st-2">Aguardando…</div>
+      </div>
     </div>
+    <p id="pair-status" class="phone-status center">Preparando…</p>
+    <p class="muted small center">Sem câmera? Abra <span id="pair-url"></span> e digite o código <b id="pair-code">······</b> escolhendo o jogador</p>
+    <p class="muted small center">O celular se reconecta sozinho · <kbd class="key-dot c-a"></kbd> desconectar todos · <kbd>VOLTAR</kbd> fechar</p>
   </div>
 </div>
 

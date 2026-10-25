@@ -53,7 +53,13 @@
   .dpad .d.pressed, .mid .s.pressed { background: #6c5fc7; filter: none; }
   .shoulder.pressed { background: #fff; }
   .face .f.pressed { transform: scale(.92); box-shadow: none; }
-  .player { position: absolute; left: 50%; top: 52px; transform: translateX(-50%); color: var(--muted); font-size: 13px; text-align: center; }
+  .player { position: absolute; left: 50%; top: 50px; transform: translateX(-50%); font: 800 15px inherit; text-align: center;
+    padding: 4px 16px; border-radius: 16px; color: #fff; background: var(--dark); }
+  .player.p1 { background: var(--a); } .player.p2 { background: var(--x); }
+  .player.p3 { background: var(--y); } .player.p4 { background: #b8901a; }
+  .pick { display: flex; gap: 10px; }
+  .pick label { padding: 10px 18px; border-radius: 12px; background: var(--dark); font-weight: 700; }
+  .pick input { margin-right: 6px; }
 
   .rotate { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: none; align-items: center; justify-content: center;
     text-align: center; padding: 24px; background: var(--bg); z-index: 10; font-size: 18px; }
@@ -93,6 +99,10 @@
 <form class="code" id="code-form" hidden>
   <div>Digite o código que aparece na TV</div>
   <input id="code" maxlength="6" autocomplete="off" autocapitalize="characters">
+  <div class="pick">
+    <label><input type="radio" name="pl" value="1" checked>Jogador 1</label>
+    <label><input type="radio" name="pl" value="2">Jogador 2</label>
+  </div>
   <button type="submit">Conectar</button>
 </form>
 
@@ -102,7 +112,15 @@
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
-  var code = (location.hash || "").replace("#", "").toUpperCase();
+  // link do QR Code: controle.html#CODIGO-2  (código da TV + número do jogador)
+  var hash = (location.hash || "").replace("#", "").toUpperCase().split("-");
+  var code = hash[0] || "";
+  var wantPlayer = +hash[1] || 1;
+  function showPlayer(n) {
+    var el = $("player");
+    el.textContent = "Jogador " + n;
+    el.className = "player p" + n;
+  }
   var peer = null, conn = null, mask = 0, menu = false, retry = null;
 
   function status(kind, text) { $("status").className = "status " + kind; $("status-text").textContent = text; }
@@ -191,10 +209,10 @@
   }
   function dial() {
     status("wait", "Conectando à TV…");
-    conn = peer.connect("snestv-pad-" + code, { reliable: true, serialization: "json" });
+    conn = peer.connect("snestv-pad-" + code, { reliable: true, serialization: "json", metadata: { player: wantPlayer } });
     conn.on("open", function () { status("ok", "Conectado"); send(); });
     conn.on("data", function (d) {
-      if (d && d.t === "hi") $("player").textContent = "Jogador " + d.player;
+      if (d && d.t === "hi") { wantPlayer = d.player; showPlayer(d.player); }
     });
     conn.on("close", function () { status("wait", "Reconectando…"); retry = setTimeout(connect, 2000); });
     conn.on("error", function () { retry = setTimeout(connect, 2000); });
@@ -206,7 +224,13 @@
     $("code-form").hidden = true;
     connect();
   }
-  $("code-form").addEventListener("submit", function (e) { e.preventDefault(); start($("code").value); });
+  $("code-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var r = document.querySelector('input[name="pl"]:checked');
+    wantPlayer = r ? +r.value : 1;
+    start($("code").value);
+  });
+  showPlayer(wantPlayer);
   document.addEventListener("visibilitychange", function () { if (!document.hidden && (!conn || !conn.open)) connect(); });
   start(code);
 })();

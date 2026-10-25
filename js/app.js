@@ -1552,8 +1552,16 @@
 
   function ctrlConn(conn) {
     conn.on("open", function () {
-      var slot = ctrl.conns.indexOf(null);
-      if (slot < 0) slot = ctrl.conns.length;
+      var want = conn.metadata && +conn.metadata.player;
+      var slot;
+      if (want >= 1 && want <= 4) {
+        slot = want - 1;
+        var prev = ctrl.conns[slot];
+        if (prev && prev !== conn) { ctrl.conns[slot] = null; try { prev.close(); } catch (e) {} }
+      } else {
+        slot = ctrl.conns.indexOf(null);
+        if (slot < 0) slot = ctrl.conns.length;
+      }
       if (slot >= 4) { try { conn.close(); } catch (e) {} return; }
       ctrl.conns[slot] = conn;
       ctrl.states[slot] = {};
@@ -1561,7 +1569,8 @@
       toast("📱 Celular conectado — jogador " + (slot + 1), 2500);
       state.padBadgeDirty = true;
       pairPaint();
-      if (state.view === "pair") setTimeout(function () { if (state.view === "pair") closePair(); }, 1500);
+      // fecha sozinho quando os dois jogadores estiverem conectados
+      if (state.view === "pair" && ctrl.conns[0] && ctrl.conns[1]) setTimeout(function () { if (state.view === "pair") closePair(); }, 2000);
       conn.on("data", function (d) {
         if (!d || d.t !== "pad") return;
         var st = {};
@@ -1575,6 +1584,7 @@
         ctrl.states[slot] = null;
         toast("Celular do jogador " + (slot + 1) + " desconectado", 2200);
         state.padBadgeDirty = true;
+        pairPaint();
       });
     });
   }
@@ -1595,22 +1605,33 @@
   }
   function pairPaint() {
     if ($("pair").hidden) return;
-    var n = ctrlCount();
-    $("pair-count").textContent = n ? (n === 1 ? "1 celular conectado" : n + " celulares conectados") : "";
+    for (var p = 1; p <= 2; p++) {
+      var on = !!ctrl.conns[p - 1];
+      $("slot-" + p).classList.toggle("on", on);
+      $("pair-st-" + p).textContent = on ? "Conectado ✓" : "Aguardando…";
+    }
     if (!ctrl.ready || !window.qrcode) { pairStatus("Preparando…"); return; }
     var url = sendUrl(ctrl.code).replace("enviar.html", "controle.html");
-    var qr = qrcode(0, "M"); qr.addData(url); qr.make();
-    $("pair-qr").innerHTML = qr.createSvgTag({ cellSize: 6, margin: 3, scalable: true });
+    if (!state.pairQr) {
+      for (var q = 1; q <= 2; q++) {
+        var qr = qrcode(0, "M"); qr.addData(url + "-" + q); qr.make();
+        $("pair-qr-" + q).innerHTML = qr.createSvgTag({ cellSize: 6, margin: 3, scalable: true });
+      }
+      state.pairQr = true;
+    }
     $("pair-code").textContent = ctrl.code;
-    $("pair-url").textContent = url.replace(/^https?:\/\//, "").replace(/#.*$/, "") + "  ·  código " + ctrl.code;
-    pairStatus(n ? "Pode conectar outro celular (jogador " + (n + 1) + ")" : "Aguardando o celular…", n ? "ok" : "");
+    $("pair-url").textContent = url.replace(/^https?:\/\//, "").replace(/#.*$/, "");
+    var n = ctrlCount();
+    pairStatus(n === 0 ? "Aguardando os celulares…" : n === 1 ? "Um celular conectado. Falta o outro jogador (ou aperte VOLTAR para jogar sozinho)." :
+      "Dois celulares conectados — bom jogo!", n ? "ok" : "");
   }
   function openPair(from) {
     state.pairFrom = from;
     state.view = "pair";
     $("menu").hidden = true;
     $("pair").hidden = false;
-    $("pair-qr").innerHTML = "";
+    state.pairQr = false;
+    $("pair-qr-1").innerHTML = ""; $("pair-qr-2").innerHTML = "";
     $("pair-code").textContent = "······";
     try { localStorage.setItem("snestv.ctrl", "1"); } catch (e) {}
     var libs = window.qrcode ? Promise.resolve() : loadScript("lib/qrcode.js");

@@ -332,3 +332,15 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 /* ---------- Ícones dos cartuchos ---------- */
 .cart-label span svg { display: block; width: 5rem; height: auto; }
 .det-cover .cart-label span svg { width: 5.6rem; }
+
+/* ---------- Dois celulares como controle ---------- */
+.panel.pair-panel { width: 66rem; max-width: 94vw; text-align: center; }
+.pair-slots { display: flex; justify-content: center; margin: 1.4rem 0 0.6rem; }
+.pair-slot { width: 24rem; margin: 0 1.4rem; padding: 1.2rem 1.2rem 1rem; border-radius: 1.1rem; background: rgba(255,255,255,0.04); border: 0.15rem solid transparent; }
+.pair-slot .phone-qr-box { display: inline-block; margin: 0.8rem 0; }
+.pair-slot .pair-qr { width: 15rem; height: 15rem; }
+.pair-tag { display: inline-block; font-weight: 800; font-size: 1.3rem; padding: 0.3rem 1.2rem; border-radius: 2rem; color: #fff; }
+.p1 .pair-tag { background: #d6383c; } .p2 .pair-tag { background: #3a63c8; }
+.pair-st { font-size: 1.1rem; font-weight: 700; color: #9a94a8; }
+.pair-slot.on { border-color: #8fe3a5; }
+.pair-slot.on .pair-st { color: #8fe3a5; }
