@@ -369,3 +369,10 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 .panel.del-panel { width: 72rem; max-width: 94vw; text-align: center; }
 .del-btns .net-btn { width: 20rem; }
 .net-btn.danger.focused { background: #b8343a; border-color: #ff9b9b; }
+
+/* ---------- Onde salvar ---------- */
+.dest { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; margin: 0.6rem 0 0.2rem; }
+.dest-label { color: #9a94a8; margin-right: 0.8rem; font-size: 1.05rem; }
+.dest-opt { padding: 0.45rem 1.1rem; margin-right: 0.6rem; border-radius: 2rem; background: rgba(255,255,255,0.06); font-weight: 700; color: #9a94a8; border: 0.12rem solid transparent; }
+.dest-opt.on { background: #6c5fc7; color: #fff; border-color: #b9adff; }
+.dest-opt.off { opacity: 0.4; text-decoration: line-through; }

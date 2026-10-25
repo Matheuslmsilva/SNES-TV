@@ -187,7 +187,7 @@
         var to = setTimeout(function () { delete waiting[id]; clearInterval(iv); row.st("sem resposta da TV", "err"); res(); }, 120000);
         waiting[id] = function (d) {
           clearTimeout(to); clearInterval(iv); row.bar(1);
-          if (d.t === "saved") row.st("salvo na TV ✓", "ok"); else row.st(d.msg || "a TV recusou", "err");
+          if (d.t === "saved") row.st(d.where === "usb" ? "salvo no pen drive ✓" : "salvo na TV ✓", "ok"); else row.st(d.msg || "a TV recusou", "err");
           res();
         };
       });

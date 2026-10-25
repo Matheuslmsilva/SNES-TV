@@ -1053,6 +1053,8 @@
       if (c === K.ENTER || isBack(c)) closeHelp();
     } else if (state.view === "phone") {
       if (isBack(c) || c === K.ENTER) closePhone();
+      else if (c === K.LEFT) toggleDest(-1);
+      else if (c === K.RIGHT) toggleDest(1);
     } else if (state.view === "del") {
       if (c === K.LEFT) { state.delBtn = Math.max(0, state.delBtn - 1); paintDel(); }
       else if (c === K.RIGHT) { state.delBtn = Math.min(2, state.delBtn + 1); paintDel(); }
@@ -1276,6 +1278,8 @@
           if (ok || back) closeHelp();
         } else if (state.view === "phone") {
           if (back || hit(BTN.B) || hit(BTN.A)) closePhone();
+          if (left) toggleDest(-1);
+          if (right) toggleDest(1);
         } else if (state.view === "pair") {
           if (back) closePair();
         } else if (state.view === "del") {
@@ -1499,8 +1503,70 @@
     el.className = "phone-status " + (kind || "");
   }
 
+  // ---------------- onde salvar os jogos recebidos ----------------
+  var usbDrives = [];
+  function destPref() { try { return localStorage.getItem("snestv.dest") === "usb" ? "usb" : "tv"; } catch (e) { return "tv"; } }
+  function destActual() { return destPref() === "usb" && IS_TIZEN && usbDrives.length ? "usb" : "tv"; }
+  function paintDest() {
+    var d = destActual(), usbOk = IS_TIZEN && usbDrives.length > 0;
+    $("dest-tv").classList.toggle("on", d === "tv");
+    $("dest-usb").classList.toggle("on", d === "usb");
+    $("dest-usb").classList.toggle("off", !usbOk);
+    $("dest-usb").textContent = usbOk ? "Pen drive" + (usbDrives.length > 1 ? " (" + usbDrives[0] + ")" : "") : "Pen drive";
+    $("dest-note").textContent = !IS_TIZEN ? "Salvar no pen drive só funciona no app instalado na TV." :
+      !usbOk ? "Conecte um pen drive para poder salvar nele." :
+      d === "usb" ? "Os jogos vão para a pasta SNES do pen drive." : "";
+  }
+  function toggleDest(dir) {
+    if (!IS_TIZEN || !usbDrives.length) { paintDest(); toast(IS_TIZEN ? "Nenhum pen drive conectado" : "Pen drive só no app instalado na TV", 2500); return; }
+    try { localStorage.setItem("snestv.dest", dir > 0 ? "usb" : "tv"); } catch (e) {}
+    paintDest();
+  }
+  function refreshDrives() {
+    if (!IS_TIZEN) { usbDrives = []; return Promise.resolve(); }
+    return tizenStorages().then(function (list) { usbDrives = list.map(function (s) { return s.label; }); });
+  }
+
+  // grava o jogo na pasta SNES do pen drive (app instalado)
+  function saveToUsb(name, u8) {
+    return new Promise(function (resolve, reject) {
+      var label = usbDrives[0];
+      try {
+        tizen.filesystem.resolve(label, function (root) {
+          var dir;
+          try { dir = root.resolve("SNES"); } catch (e) { try { dir = root.createDirectory("SNES"); } catch (e2) { return reject(e2); } }
+          var path = dir.fullPath + "/" + name;
+          try { dir.deleteFile(path, function () { write(); }, function () { write(); }); } catch (e) { write(); }
+          function write() {
+            // API nova (Tizen 5.0+)
+            try {
+              if (tizen.filesystem.openFile) {
+                var fh = tizen.filesystem.openFile(path, "w");
+                fh.writeData(u8); fh.close();
+                return resolve();
+              }
+            } catch (e) { /* cai para a API antiga */ }
+            try {
+              var file = dir.createFile(name);
+              file.openStream("w", function (fs) {
+                try {
+                  for (var off = 0; off < u8.length; off += 65536) {
+                    fs.writeBytes(Array.prototype.slice.call(u8.subarray(off, Math.min(u8.length, off + 65536))));
+                  }
+                  fs.close(); resolve();
+                } catch (e) { reject(e); }
+              }, reject);
+            } catch (e) { reject(e); }
+          }
+        }, reject, "rw");
+      } catch (e) { reject(e); }
+    });
+  }
+
   function openPhone() {
     state.view = "phone";
+    refreshDrives().then(paintDest);
+    paintDest();
     $("phone").hidden = false;
     $("phone-qr").innerHTML = "";
     $("phone-code").textContent = "······";
@@ -1561,7 +1627,7 @@
       if (!d || typeof d !== "object") return;
       if (d.t === "hello") {
         var model = $("tv-model") ? $("tv-model").textContent : "";
-        conn.send({ t: "hi", tv: /Samsung/.test(model) ? model : "TV" });
+        conn.send({ t: "hi", tv: (/Samsung/.test(model) ? model : "TV") + (destActual() === "usb" ? " (salvando no pen drive)" : "") });
       } else if (d.t === "start") {
         var ok = ROM_EXT.test(d.name || "") && d.size > 0 && d.size <= 16 * 1048576;
         var li = document.createElement("li");
@@ -1573,16 +1639,17 @@
       } else if (d.t === "end" && cur && cur.id === d.id) {
         var f = cur; cur = null;
         if (f.bad || f.got !== f.size) { f.row.textContent = f.name + " — falhou"; conn.send({ t: "fail", id: f.id, msg: "chegou incompleto" }); return; }
-        romsPut({ name: f.name, size: f.size, data: f.buf.buffer, added: Date.now() }).then(function () {
-          f.row.textContent = f.name + " — salvo ✓";
+        var toUsb = destActual() === "usb";
+        (toUsb ? saveToUsb(f.name, f.buf) : romsPut({ name: f.name, size: f.size, data: f.buf.buffer, added: Date.now() })).then(function () {
+          f.row.textContent = f.name + (toUsb ? " — salvo no pen drive ✓" : " — salvo ✓");
           Conquistas.unlock("gen_send");
           f.row.className = "ok";
           phone && phone.received++;
-          conn.send({ t: "saved", id: f.id });
+          conn.send({ t: "saved", id: f.id, where: toUsb ? "usb" : "tv" });
           phoneStatus("Jogo recebido! Pode mandar mais ou apertar VOLTAR.", "ok");
         }, function () {
-          f.row.textContent = f.name + " — sem espaço na TV";
-          conn.send({ t: "fail", id: f.id, msg: "sem espaço na TV" });
+          f.row.textContent = f.name + (toUsb ? " — não deu para gravar no pen drive" : " — sem espaço na TV");
+          conn.send({ t: "fail", id: f.id, msg: toUsb ? "o pen drive não aceitou (protegido ou cheio?)" : "sem espaço na TV" });
         });
       }
     });
