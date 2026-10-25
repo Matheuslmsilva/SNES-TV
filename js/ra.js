@@ -16,6 +16,52 @@
   var acct = load("snestv.ra", null);          // { user, token, name, score }
   var sets = load("snestv.ra.sets", {});       // por jogo: { h, id, title, img, total, unlocked, list, at }
   var hashes = load("snestv.ra.hash", {});     // gameKey -> md5
+  var h2g = load("snestv.ra.h2g", {});         // md5 -> id do jogo no RetroAchievements
+  var queue = load("snestv.ra.queue", []);     // conquistas feitas sem internet, esperando envio
+
+  // ---------- respostas guardadas para jogar sem internet (IndexedDB; localStorage se não houver) ----------
+  var dbp = null;
+  function db() {
+    if (dbp) return dbp;
+    dbp = new Promise(function (res) {
+      try {
+        var rq = indexedDB.open("snestv-ra", 1);
+        rq.onupgradeneeded = function () { rq.result.createObjectStore("kv"); };
+        rq.onsuccess = function () { res(rq.result); };
+        rq.onerror = function () { res(null); };
+      } catch (e) { res(null); }
+    });
+    return dbp;
+  }
+  function kvGet(k) {
+    return db().then(function (d) {
+      if (!d) { try { return localStorage.getItem("snestv.rakv." + k); } catch (e) { return null; } }
+      return new Promise(function (res) {
+        try { var r = d.transaction("kv").objectStore("kv").get(k); r.onsuccess = function () { res(r.result == null ? null : r.result); }; r.onerror = function () { res(null); }; }
+        catch (e) { res(null); }
+      });
+    });
+  }
+  function kvPut(k, v) {
+    return db().then(function (d) {
+      if (!d) { try { localStorage.setItem("snestv.rakv." + k, v); } catch (e) {} return; }
+      try { d.transaction("kv", "readwrite").objectStore("kv").put(v, k); } catch (e) {}
+    });
+  }
+  function addUnlock(g, id) {
+    if (!g || !id) return Promise.resolve();
+    return kvGet("unl:" + g).then(function (t) {
+      var l = []; try { l = t ? JSON.parse(t) : []; } catch (e) {}
+      if (l.indexOf(+id) < 0) l.push(+id);
+      return kvPut("unl:" + g, JSON.stringify(l));
+    });
+  }
+  function strBytes(t) { var u = new Uint8Array(t.length); for (var i = 0; i < t.length; i++) u[i] = t.charCodeAt(i) & 255; return u; }
+  function qs(body) {
+    var o = {};
+    String(body || "").split("&").forEach(function (kv) { var i = kv.indexOf("="); if (i > 0) o[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1).replace(/\+/g, " ")); });
+    return o;
+  }
   function saveSets() {
     try { localStorage.setItem("snestv.ra.sets", JSON.stringify(sets)); }
     catch (e) {
@@ -117,6 +163,7 @@
       if (!hashes[key]) { hashes[key] = h; save("snestv.ra.hash", hashes); }
       return post({ r: "achievementsets", u: acct.user, t: acct.token, m: h, v: 2 }).then(function (j) {
         var old = sets[key] || {};
+        if (j.Success && j.GameId) { kvPut("set:" + h, JSON.stringify(j)); h2g[h] = j.GameId; save("snestv.ra.h2g", h2g); }
         if (!j.Success || !j.GameId) { sets[key] = { h: h, id: 0, at: Date.now() }; saveSets(); return null; }
         var list = [], seen = {};
         (j.Sets || []).forEach(function (st) {
@@ -157,6 +204,7 @@
     scanning: false,
     scan: function (games, keyOf, romFor) {
       if (!acct || RA.scanning) return;
+      RA.flush();
       var todo = games.filter(function (g) {
         var s = sets[keyOf(g)];
         return !s || Date.now() - s.at > 7 * 86400000;
@@ -184,6 +232,7 @@
       var M = lite && lite.M;
       if (!acct || !M || !M._s_ra_login_tok) return false;
       RA.M = M; RA.key = key; RA.game = null;
+      RA.flush();
       var h = romHash(rom);
       hashes[key] = h; save("snestv.ra.hash", hashes);
       M.raCall = raCall;
@@ -225,6 +274,34 @@
 
     reset: function () { if (RA.M && RA.M._s_ra_reset) RA.M._s_ra_reset(); },
 
+    pending: function () { return queue.length; },
+
+    // envia as conquistas feitas sem internet (mais antigas primeiro), como o RAOfflineProxy
+    flushing: false,
+    flush: function () {
+      if (RA.flushing || !queue.length || !acct) return Promise.resolve(0);
+      RA.flushing = true;
+      var sent = 0;
+      function next() {
+        if (!queue.length) return Promise.resolve();
+        var it = queue[0];
+        // "o" = segundos desde o desbloqueio (o site aceita até 14 dias); "v" = assinatura com o mesmo valor
+        var o = Math.max(1, Math.min(1209600, Math.round((Date.now() - it.at) / 1000)));
+        var v = md5(strBytes(String(it.a) + it.u + "0" + String(it.a) + String(o)));
+        var p = { r: "awardachievement", u: it.u, t: it.t, a: it.a, h: 0, o: o, v: v };
+        if (it.m) p.m = it.m;
+        return post(p).then(function (j) {
+          var err = String((j && (j.Error || j.Code)) || "");
+          if (j && !j.Success && /token|credential|login|auth/i.test(err) && !/already/i.test(err)) throw new Error("auth");
+          queue.shift(); save("snestv.ra.queue", queue);
+          if (j && j.Success) { sent++; addUnlock(h2g[it.m], it.a); }
+          return next();
+        });
+      }
+      return next().then(function () { RA.flushing = false; if (sent && RA.onEvent) RA.onEvent("flushed", { n: sent }); if (RA.onUpdate) RA.onUpdate(); return sent; },
+        function () { RA.flushing = false; return sent; });
+    },
+
     detach: function () {
       clearInterval(RA.idle);
       if (RA.M) { try { RA.sync(); RA.M._s_ra_unload(); } catch (e) {} }
@@ -238,13 +315,11 @@
     return p;     // (pequeno; o rcheevos copia o texto)
   }
 
-  // o rcheevos pede uma chamada HTTP; a resposta volta para o C
+  // o rcheevos pede uma chamada HTTP; a resposta volta para o C.
+  // Com internet: repassa ao site e guarda a resposta. Sem internet: responde com o que foi guardado
+  // e põe as conquistas numa fila, enviada quando a conexão voltar (mesma ideia do RAOfflineProxy).
   function raCall(url, body, ctype, cb, data) {
-    var M = RA.M;
-    var x = new XMLHttpRequest();
-    x.open(body != null ? "POST" : "GET", url, true);
-    if (body != null) x.setRequestHeader("Content-Type", ctype || "application/x-www-form-urlencoded");
-    x.timeout = 30000;
+    var M = RA.M, q = qs(body), r = q.r || "";
     function done(status, text) {
       if (!RA.M || RA.M !== M) return;           // o jogo já fechou
       var n = M.lengthBytesUTF8(text), p = M._malloc(n + 1);
@@ -252,11 +327,76 @@
       try { M._s_ra_resp(cb, data, p, n, status); } catch (e) { console.error(e); }
       M._free(p);
     }
-    x.onload = function () { done(x.status, x.responseText || ""); };
-    // -2 = erro de rede que o rcheevos tenta de novo depois (desbloqueios ficam guardados)
-    x.onerror = x.ontimeout = function () { done(/awardachievement|submitlbentry|ping/.test(body || url) ? -2 : -1, ""); };
+    function offline() {
+      offlineAnswer(r, q).then(function (t) {
+        if (t != null) { RA.offline = true; done(200, t); }
+        else done(-1, "");
+      });
+    }
+    var x = new XMLHttpRequest();
+    x.open(body != null ? "POST" : "GET", url, true);
+    if (body != null) x.setRequestHeader("Content-Type", ctype || "application/x-www-form-urlencoded");
+    x.timeout = 15000;
+    x.onload = function () {
+      if (x.status === 0 || x.status >= 500) { offline(); return; }
+      var t = x.responseText || "";
+      RA.offline = false;
+      remember(r, q, t);
+      done(x.status, t);
+      if (queue.length) RA.flush();
+    };
+    x.onerror = x.ontimeout = offline;
     x.send(body);
   }
+
+  function remember(r, q, t) {
+    var j = null; try { j = JSON.parse(t); } catch (e) { return; }
+    if (!j || !j.Success) return;
+    if (r === "login2") kvPut("login:" + String(q.u).toLowerCase(), t);
+    else if (r === "achievementsets") {
+      kvPut("set:" + (q.m || "g" + q.g), t);
+      if (q.m && j.GameId) { h2g[q.m] = j.GameId; save("snestv.ra.h2g", h2g); }
+    } else if (r === "gameid") kvPut("gid:" + q.m, t);
+    else if (r === "startsession") {
+      var ids = (j.Unlocks || []).concat(j.HardcoreUnlocks || []).map(function (u) { return +u.ID; });
+      kvPut("unl:" + q.g, JSON.stringify(ids));
+    } else if (r === "awardachievement") addUnlock(q.g || h2g[q.m], q.a);
+  }
+
+  function offlineAnswer(r, q) {
+    var now = Math.floor(Date.now() / 1000);
+    if (r === "login2") return kvGet("login:" + String(q.u).toLowerCase()).then(function (t) {
+      if (t) return t;
+      if (!acct || !q.t || q.t !== acct.token) return null;
+      return JSON.stringify({ Success: true, User: acct.user, Token: acct.token, Score: 0, SoftcorePoints: acct.score || 0, Messages: 0, Permissions: 1, AccountType: "Registered" });
+    });
+    if (r === "achievementsets") return kvGet("set:" + (q.m || "g" + q.g));
+    if (r === "gameid") return kvGet("gid:" + q.m).then(function (t) {
+      return t || (h2g[q.m] ? JSON.stringify({ Success: true, GameID: h2g[q.m] }) : null);
+    });
+    if (r === "startsession") return kvGet("unl:" + q.g).then(function (t) {
+      // sessão montada aqui: desbloqueios guardados + os que estão na fila
+      var ids = []; try { ids = t ? JSON.parse(t) : []; } catch (e) {}
+      queue.forEach(function (it) { if (h2g[it.m] === +q.g && ids.indexOf(+it.a) < 0) ids.push(+it.a); });
+      return JSON.stringify({ Success: true, Unlocks: ids.map(function (id) { return { ID: id, When: now }; }), HardcoreUnlocks: [], ServerNow: now });
+    });
+    if (r === "awardachievement") {
+      if (+q.h) return Promise.resolve(JSON.stringify({ Success: false, Error: "Hardcore não funciona sem internet" }));
+      if (!queue.some(function (it) { return it.a === +q.a; })) {
+        queue.push({ a: +q.a, m: q.m || "", u: q.u, t: q.t, at: Date.now() });
+        save("snestv.ra.queue", queue);
+      }
+      var g = h2g[q.m];
+      if (g) addUnlock(g, q.a);
+      if (RA.onEvent) RA.onEvent("queued", { n: queue.length });
+      return Promise.resolve(JSON.stringify({ Success: true, Score: acct ? acct.score : 0, SoftcoreScore: acct ? acct.score : 0, AchievementID: +q.a }));
+    }
+    // ping e outros: só confirma
+    return Promise.resolve(JSON.stringify({ Success: true }));
+  }
+
+  // voltou a internet → envia a fila
+  try { window.addEventListener("online", function () { setTimeout(function () { RA.flush(); }, 2000); }); } catch (e) {}
 
   window.RA = RA;
 })();

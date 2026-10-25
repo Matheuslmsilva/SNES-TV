@@ -1972,7 +1972,8 @@
     var card = $("ach-list").querySelector(".ra-card");
     card.querySelector(".ra-h").textContent = raU ? "RetroAchievements · " + raU.name : "Conquistas da comunidade (RetroAchievements)";
     card.querySelector(".ra-s").textContent = raU ?
-      (raSets.length ? raSets.length + " dos seus jogos têm conquistas da comunidade · " + (raU.score || 0) + " pontos" : "Procurando os seus jogos no RetroAchievements…") :
+      (raSets.length ? raSets.length + " dos seus jogos têm conquistas da comunidade · " + (raU.score || 0) + " pontos" : "Procurando os seus jogos no RetroAchievements…") +
+      (RA.pending() ? " · " + RA.pending() + " esperando internet para enviar" : " · funciona também sem internet") :
       "Milhares de conquistas feitas pela comunidade para quase todos os jogos de SNES. Crie uma conta grátis em retroachievements.org e entre aqui.";
     var gh = $("ach-list").querySelectorAll(".ra-g"), ri = $("ach-list").querySelectorAll(".ach-item.ra"), q = 0;
     raSets.forEach(function (r, i) {
@@ -2302,10 +2303,12 @@
   // eventos do rcheevos durante o jogo
   function raEvent(type, d) {
     if (type === "game") {
-      if (d && d.total) toast("🏆 RetroAchievements: " + d.unlocked + " de " + d.total + " conquistas da comunidade", 3500);
+      if (d && d.total) toast("🏆 RetroAchievements: " + d.unlocked + " de " + d.total + " conquistas da comunidade" + (RA.offline ? " (sem internet — envio depois)" : ""), 3500);
       else if (!d) toast("Este jogo não tem conquistas da comunidade (ou é outra versão da ROM)", 3000);
       return;
     }
+    if (type === "queued") { toast("Sem internet: conquista guardada (" + d.n + " na fila). Vai para o site quando a internet voltar.", 3200); return; }
+    if (type === "flushed") { toast("🏆 " + d.n + " conquista(s) feitas sem internet enviadas ao RetroAchievements", 3200); return; }
     if (type === "loginfail") { toast("RetroAchievements: " + ((d && d.msg) || "não consegui entrar"), 3500); return; }
     if (type === 1 && d) {
       showAch({ t: d.t, d: d.d + (d.p ? " · " + d.p + " pts" : ""), img: d.b, label: "Conquista da comunidade" });
