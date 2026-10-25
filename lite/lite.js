@@ -19,7 +19,8 @@
     this.paused = false;
     this.turbo = false;
     this.frames = 0;
-    this.pads = [0, 0, 0, 0];
+    this.pads = [0, 0, 0, 0, 0];
+    this.multitap = false;
     this.started = false;
   }
 
@@ -189,7 +190,7 @@
   // ---------------- controles ----------------
   LiteSNES.prototype.press = function (port, btn, down) {
     if (btn === 27) { this.turbo = !!down; return; }
-    if (btn < 0 || btn > 11 || port > 3) return;
+    if (btn < 0 || btn > 11 || port > 4) return;
     var m = this.pads[port];
     m = down ? (m | (1 << btn)) : (m & ~(1 << btn));
     this.pads[port] = m;
@@ -197,6 +198,12 @@
   };
 
   LiteSNES.prototype.setTurbo = function (on) { this.turbo = !!on; };
+  // Multitap: jogadores 3 e 4 (só funciona nos jogos feitos para o adaptador)
+  LiteSNES.prototype.setMultitap = function (on) {
+    if (!this.M || !this.M._s_multitap || !!on === this.multitap) return this.multitap;
+    this.multitap = !!this.M._s_multitap(on ? 1 : 0);
+    return this.multitap;
+  };
   LiteSNES.prototype.pause = function () { this.paused = true; };
   LiteSNES.prototype.play = function () { this.paused = false; this.last = performance.now(); this.acc = 0; };
   LiteSNES.prototype.reset = function () { if (this.M) this.M._s_reset(); };

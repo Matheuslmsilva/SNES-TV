@@ -1156,6 +1156,15 @@
         } else if (state.view === "game") {
           if ((any[BTN.SELECT] && any[BTN.START]) || hit("menu")) { openMenu(); }
           else {
+            // 3º ou 4º jogador presente → liga o Multitap (motor TV antiga)
+            if (LITE) {
+              var need = !!(ctrl.conns[2] || ctrl.conns[3] || pads.length >= 3);
+              if (need !== !!state.multitap) {
+                state.multitap = need;
+                var mt = LITE.setMultitap(need);
+                if (need) toast(mt ? "Multitap ligado: até 4 jogadores (só nos jogos compatíveis)" : "Este jogo não aceita Multitap — só 2 jogadores", 3500);
+              }
+            }
             feedGame(states);
             var anyKey = false;
             for (var ak in any) { anyKey = true; break; }
@@ -1569,8 +1578,8 @@
       toast("📱 Celular conectado — jogador " + (slot + 1), 2500);
       state.padBadgeDirty = true;
       pairPaint();
-      // fecha sozinho quando os dois jogadores estiverem conectados
-      if (state.view === "pair" && ctrl.conns[0] && ctrl.conns[1]) setTimeout(function () { if (state.view === "pair") closePair(); }, 2000);
+      // fecha sozinho quando os 4 jogadores estiverem conectados
+      if (state.view === "pair" && ctrl.conns[0] && ctrl.conns[1] && ctrl.conns[2] && ctrl.conns[3]) setTimeout(function () { if (state.view === "pair") closePair(); }, 2000);
       conn.on("data", function (d) {
         if (!d || d.t !== "pad") return;
         var st = {};
@@ -1605,7 +1614,7 @@
   }
   function pairPaint() {
     if ($("pair").hidden) return;
-    for (var p = 1; p <= 2; p++) {
+    for (var p = 1; p <= 4; p++) {
       var on = !!ctrl.conns[p - 1];
       $("slot-" + p).classList.toggle("on", on);
       $("pair-st-" + p).textContent = on ? "Conectado ✓" : "Aguardando…";
@@ -1613,7 +1622,7 @@
     if (!ctrl.ready || !window.qrcode) { pairStatus("Preparando…"); return; }
     var url = sendUrl(ctrl.code).replace("enviar.html", "controle.html");
     if (!state.pairQr) {
-      for (var q = 1; q <= 2; q++) {
+      for (var q = 1; q <= 4; q++) {
         var qr = qrcode(0, "M"); qr.addData(url + "-" + q); qr.make();
         $("pair-qr-" + q).innerHTML = qr.createSvgTag({ cellSize: 6, margin: 3, scalable: true });
       }
@@ -1622,8 +1631,8 @@
     $("pair-code").textContent = ctrl.code;
     $("pair-url").textContent = url.replace(/^https?:\/\//, "").replace(/#.*$/, "");
     var n = ctrlCount();
-    pairStatus(n === 0 ? "Aguardando os celulares…" : n === 1 ? "Um celular conectado. Falta o outro jogador (ou aperte VOLTAR para jogar sozinho)." :
-      "Dois celulares conectados — bom jogo!", n ? "ok" : "");
+    pairStatus(n === 0 ? "Aguardando os celulares…" : (n === 1 ? "1 celular conectado" : n + " celulares conectados") +
+      (n >= 4 ? " — bom jogo!" : " — conecte mais ou aperte VOLTAR para jogar"), n ? "ok" : "");
   }
   function openPair(from) {
     state.pairFrom = from;
@@ -1631,7 +1640,7 @@
     $("menu").hidden = true;
     $("pair").hidden = false;
     state.pairQr = false;
-    $("pair-qr-1").innerHTML = ""; $("pair-qr-2").innerHTML = "";
+    for (var qq = 1; qq <= 4; qq++) $("pair-qr-" + qq).innerHTML = "";
     $("pair-code").textContent = "······";
     try { localStorage.setItem("snestv.ctrl", "1"); } catch (e) {}
     var libs = window.qrcode ? Promise.resolve() : loadScript("lib/qrcode.js");
