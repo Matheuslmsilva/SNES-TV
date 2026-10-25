@@ -474,3 +474,6 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 .net-list li b { font-size: 1.15rem; color: #ece9f2; }
 .net-list li span { font-size: 0.85rem; color: #9a94a8; margin-left: 1rem; }
 .net-list li.focused { background: rgba(91,75,214,0.35); border-color: #b9adff; }
+.sn-a { color: #fff; background: #d6383c !important; } .sn-b { color: #222; background: #e8b71f !important; }
+.sn-x { color: #fff; background: #3a63c8 !important; } .sn-y { color: #fff; background: #2f9a4e !important; }
+.side-list.remote li b.sn-b { color: #222; }

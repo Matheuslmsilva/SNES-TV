@@ -899,6 +899,7 @@
     $("fps-state").textContent = showFps() ? "sim" : "não";
     $("crt-state").textContent = crtOn() ? "ligado" : "desligado";
     $("side-state").textContent = sideOn() ? "sim" : "não";
+    $("padmodel-state").textContent = PADMODEL_NAMES[padModel()];
     $("menu").hidden = false;
     paintMenu();
   }
@@ -973,6 +974,13 @@
       try { localStorage.setItem("snestv.crt", crtOn() ? "0" : "1"); } catch (e) {}
       $("crt-state").textContent = crtOn() ? "ligado" : "desligado";
       fitPlayer();
+      return;
+    }
+    if (act === "padmodel") {
+      var order = ["auto", "snes", "xbox", "ps"], nm = order[(order.indexOf(padModel()) + 1) % order.length];
+      try { localStorage.setItem("snestv.padmodel", nm); } catch (e) {}
+      $("padmodel-state").textContent = PADMODEL_NAMES[nm];
+      if (state.current) buildSideHelp(state.current, LITE ? LITE.rom : null);
       return;
     }
     if (act === "fps") {
@@ -1839,6 +1847,12 @@
       // fecha sozinho quando os 4 jogadores estiverem conectados
       if (state.view === "pair" && ctrl.conns[0] && ctrl.conns[1] && ctrl.conns[2] && ctrl.conns[3]) setTimeout(function () { if (state.view === "pair") closePair(); }, 2000);
       conn.on("data", function (d) {
+        if (d && d.t === "skin") {
+          ctrl.skins = ctrl.skins || [];
+          ctrl.skins[slot] = d.s;
+          if (state.view === "game" && state.current) buildSideHelp(state.current, LITE ? LITE.rom : null);
+          return;
+        }
         if (!d || d.t !== "pad") return;
         var st = {};
         for (var b = 0; b < 12; b++) if (d.m & (1 << b)) st[b] = true;
@@ -2877,6 +2891,13 @@
     ["Analógico", "Direcional"], ["R2 (segurar)", "Turbo"], ["Botão PS", "Menu do jogo"]
   ];
 
+  var SNES_ROWS = [
+    ["B", "B"], ["A", "A"], ["Y", "Y"], ["X", "X"], ["L", "L"], ["R", "R"], ["START", "Start"], ["SELECT", "Select"],
+    ["Direcional", "Direcional"], ["Select + Start", "Menu do jogo"]
+  ];
+  var PADMODEL_NAMES = { auto: "automático", snes: "SNES", xbox: "Xbox", ps: "PlayStation (PS4/PS5)" };
+  function padModel() { try { var v = localStorage.getItem("snestv.padmodel"); return PADMODEL_NAMES[v] ? v : "auto"; } catch (e) { return "auto"; } }
+
   function buildSideHelp(g, rom) {
     var key = helpKeyFor(g, rom), h = key && GAME_HELP[key] ? GAME_HELP[key] : GENERIC_HELP;
     var L = $("side-left"), R = $("side-right");
@@ -2892,9 +2913,11 @@
     });
     paintPlayers();
 
-    var pads = connectedPads(), pt = pads.length ? padType(pads[0]) : null;
-    var rows = pt === "xbox" ? XBOX_ROWS : pt === "ps" ? PS_ROWS : TV_LIKE ? REMOTE_ROWS : PC_ROWS;
-    var head = pt === "xbox" ? "No controle Xbox" : pt === "ps" ? "No controle PlayStation" : TV_LIKE ? "No controle da TV" : "No teclado";
+    var pads = connectedPads(), pt = pads.length ? padType(pads[0]) : (ctrl.skins && ctrl.conns[0] && ctrl.skins[0]) || null;
+    if (pt === "generic") pt = "snes";
+    if (padModel() !== "auto") pt = padModel();          // escolhido no menu do jogo
+    var rows = pt === "xbox" ? XBOX_ROWS : pt === "ps" ? PS_ROWS : pt === "snes" ? SNES_ROWS : TV_LIKE ? REMOTE_ROWS : PC_ROWS;
+    var head = pt === "xbox" ? "No controle Xbox" : pt === "ps" ? "No controle PlayStation" : pt === "snes" ? "No controle SNES" : TV_LIKE ? "No controle da TV" : "No teclado";
     var html2 = '<div class="side-h">' + head + '</div><ul class="side-list remote">';
     rows.forEach(function () { html2 += "<li><b></b><span></span></li>"; });
     html2 += '</ul><div class="side-note">' + (pt ? "Os botões seguem a posição do controle do SNES. O analógico esquerdo também anda." :
@@ -2906,6 +2929,7 @@
       b.textContent = r[0];
       if (pt === "ps" && /^[✕○□△]$/.test(r[0])) b.className = "ps-sym ps-" + ({ "✕": "x", "○": "o", "□": "s", "△": "t" })[r[0]];
       if (pt === "xbox" && /^[ABXY]$/.test(r[0])) b.className = "xb-sym xb-" + r[0].toLowerCase();
+      if (pt === "snes" && /^[ABXY]$/.test(r[0])) b.className = "xb-sym sn-" + r[0].toLowerCase();
       var span = lis2[i].querySelector("span");
       span.innerHTML = /^(A|B|X|Y|L|R|Start|Select)$/.test(r[1]) ? btnChip(r[1]) : r[1] === "Direcional" ? btnChip("dpad") : "";
       if (r[1] === "Direcional" || r[1] === "Menu do jogo" || r[1] === "Turbo") span.innerHTML += "<small>" + r[1] + "</small>";
@@ -2928,7 +2952,7 @@
         } else if (n === 1 - me) who.push((NET.friend || "Amigo") + " (online)");
       } else {
         if (pads[n]) who.push(padName(pads[n]));
-        if (ctrl.conns[n]) who.push("Celular");
+        if (ctrl.conns[n]) who.push("Celular" + (ctrl.skins && ctrl.skins[n] ? " (" + ({ snes: "SNES", xbox: "Xbox", ps: "PS5" })[ctrl.skins[n]] + ")" : ""));
         if (n === 0 && !pads[0]) who.push(TV_LIKE ? "Controle da TV" : "Teclado");
       }
       if (who.length) out.push({ n: n, who: who.join(" + "), me: me < 0 ? n === 0 : n === me });
