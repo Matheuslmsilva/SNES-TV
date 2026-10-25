@@ -1,0 +1,193 @@
+/* SNES TV — interface de 10 pés (vista do sofá) */
+:root {
+  --bg: #141219;
+  --bg-2: #1d1a24;
+  --ink: #ece9f2;
+  --muted: #9a94a8;
+  --shell: #cfcbd6;       /* plástico cinza do cartucho */
+  --shell-dark: #a9a4b3;
+  --purple: #6c5fc7;      /* roxo do SNES americano */
+  --focus: #b9adff;
+  --c-a: #d6383c;         /* botões do SNES (padrão japonês/europeu) */
+  --c-b: #e8b71f;
+  --c-x: #3a63c8;
+  --c-y: #2f9a4e;
+  font-size: calc(100vh / 54);  /* 20px em 1080p, 13px em 720p */
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body {
+  background: radial-gradient(ellipse at 20% -10%, #2a2440 0%, transparent 55%), var(--bg);
+  color: var(--ink);
+  font-family: "SamsungOne", "Samsung Sans", "TizenSans", "Roboto", "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+[hidden] { display: none !important; }
+.muted { color: var(--muted); }
+.small { font-size: 0.85rem; }
+.center { text-align: center; }
+
+/* ---------- Topo ---------- */
+#launcher { display: flex; flex-direction: column; height: 100%; }
+.top {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 2.4rem 4.5rem 1.2rem;
+}
+.brand { display: flex; align-items: center; gap: 1.1rem; }
+.brand h1 { margin: 0; font-size: 2.3rem; letter-spacing: 0.12em; font-weight: 800; }
+.dots { display: grid; grid-template-columns: repeat(2, 0.8rem); gap: 0.25rem; transform: rotate(45deg); }
+.dots i { width: 0.8rem; height: 0.8rem; border-radius: 50%; display: block; }
+.c-a { background: var(--c-a); } .c-b { background: var(--c-b); }
+.c-x { background: var(--c-x); } .c-y { background: var(--c-y); }
+.status { display: flex; align-items: baseline; font-size: 1rem; color: var(--muted); margin-top: 0.2rem; }
+.status .count { margin-left: 0.8rem; }
+.count { color: var(--ink); font-weight: 700; }
+
+/* ---------- Prateleira de cartuchos ---------- */
+#shelf { flex: 1; overflow: hidden; position: relative; }
+.grid {
+  display: grid; grid-template-columns: repeat(6, 1fr);
+  gap: 2.4rem 2.2rem; padding: 1.6rem 4.5rem 4rem;
+  transition: transform 0.25s ease;
+}
+.tile { outline: none; text-align: center; }
+.cart {
+  position: relative; margin: 0 auto; width: 100%;
+  transition: transform 0.18s ease, filter 0.18s ease;
+  filter: brightness(0.8) saturate(0.85);
+}
+.shell {
+  position: relative; width: 100%; padding-top: 89%; /* proporção do cartucho */
+  background: linear-gradient(180deg, var(--shell) 0%, var(--shell-dark) 100%);
+  border-radius: 0.5rem 0.5rem 0.9rem 0.9rem;
+  -webkit-clip-path: polygon(0 0, 100% 0, 100% 82%, 93% 82%, 93% 100%, 7% 100%, 7% 82%, 0 82%);
+  clip-path: polygon(0 0, 100% 0, 100% 82%, 93% 82%, 93% 100%, 7% 100%, 7% 82%, 0 82%);
+}
+.shell::before { /* ranhuras no topo */
+  content: ""; position: absolute; left: 0; right: 0; top: 3%; height: 4%;
+  background: repeating-linear-gradient(90deg, transparent 0 0.5rem, rgba(0,0,0,0.12) 0.5rem 0.7rem);
+}
+.cart-label {
+  position: absolute; left: 9%; right: 9%; top: 11%; height: 57%;
+  border-radius: 0.3rem;
+  background: linear-gradient(160deg, hsl(var(--hue, 250), 55%, 46%), hsl(calc(var(--hue, 250) + 40), 60%, 28%));
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: inset 0 0 0 0.2rem rgba(255,255,255,0.12);
+  overflow: hidden;
+}
+.cart-label span {
+  font-size: 3rem; font-weight: 900; color: rgba(255,255,255,0.88);
+  text-shadow: 0 0.2rem 0 rgba(0,0,0,0.25);
+}
+.tile .title {
+  margin-top: 0.8rem; font-size: 1.05rem; font-weight: 600; line-height: 1.25;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  color: #cbc6d6; min-height: 2.6rem;
+}
+.tile .meta { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
+.tile .badge {
+  display: inline-block; font-size: 0.7rem; padding: 0.1rem 0.5rem; border-radius: 1rem;
+  background: var(--purple); color: #fff; margin-left: 0.4rem; vertical-align: 0.1rem;
+}
+.tile.focused .cart {
+  transform: translateY(-0.6rem) scale(1.07);
+  -webkit-filter: drop-shadow(0 0 0.25rem var(--focus)) drop-shadow(0 0 1rem rgba(185,173,255,0.6));
+  filter: drop-shadow(0 0 0.25rem var(--focus)) drop-shadow(0 0 1rem rgba(185,173,255,0.6));
+}
+.tile.focused .title { color: #fff; }
+.tile.action .cart-label { background: repeating-linear-gradient(135deg, #3b3550 0 0.8rem, #332e45 0.8rem 1.6rem); }
+.tile.action .cart-label span { font-size: 2.6rem; }
+
+/* ---------- Vazio ---------- */
+.empty { max-width: 46rem; margin: 3rem auto 0; text-align: center; font-size: 1.15rem; line-height: 1.6; }
+.empty h2 { font-size: 1.8rem; margin: 1.6rem 0 0.6rem; }
+.cart.big { width: 11rem; margin: 0 auto; filter: none; }
+
+/* ---------- Rodapé ---------- */
+.hints {
+  display: flex; gap: 2.6rem; justify-content: center; padding: 1.2rem 2rem 1.8rem;
+  font-size: 1rem; color: var(--muted); background: linear-gradient(transparent, rgba(0,0,0,0.35));
+}
+kbd {
+  display: inline-block; min-width: 1.6rem; padding: 0.1rem 0.5rem; margin-right: 0.35rem;
+  border-radius: 0.35rem; border: 0.1rem solid #4a4458; background: #2a2633;
+  font: 700 0.8rem/1.4 inherit; color: var(--ink); text-align: center;
+}
+kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; border-radius: 50%; border: none; vertical-align: -0.2rem; }
+
+/* ---------- Jogo ---------- */
+#game { position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: #000; }
+#player { width: 100%; height: 100%; }
+/* esconde a barra de botões do EmulatorJS — o menu é nosso */
+#player .ejs_menu_bar, #player .ejs_context_menu { display: none !important; }
+
+/* ---------- Carregando ---------- */
+.loading {
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 30; background: rgba(12,10,16,0.94);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2rem;
+  font-size: 1.4rem;
+}
+.cart.insert { width: 10rem; filter: none; animation: insert 1.4s ease-in-out infinite; }
+@keyframes insert { 0%,100% { transform: translateY(-0.6rem); } 50% { transform: translateY(0.6rem); } }
+
+/* ---------- Overlays ---------- */
+.overlay {
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 40; background: rgba(8,6,12,0.72);
+  display: flex; align-items: center; justify-content: center;
+}
+.panel {
+  background: var(--bg-2); border-radius: 1.2rem; padding: 1.8rem 2.6rem 1.4rem; min-width: 30rem; max-width: 80vw;
+  box-shadow: 0 1.5rem 4rem rgba(0,0,0,0.6); border-top: 0.35rem solid var(--purple);
+}
+.panel.wide { min-width: 60rem; }
+.panel h2 { margin: 0 0 0.8rem; font-size: 1.8rem; }
+.panel h3 { margin: 0.4rem 0 0.8rem; font-size: 1.15rem; color: var(--focus); }
+.menu-list { list-style: none; margin: 0 0 1.2rem; padding: 0; }
+.menu-list li {
+  font-size: 1.3rem; padding: 0.75rem 1.2rem; border-radius: 0.6rem; margin: 0.2rem 0;
+  color: #cbc6d6;
+}
+.menu-list li.focused { background: var(--purple); color: #fff; }
+.help-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; font-size: 1rem; line-height: 1.45; margin-bottom: 1rem; }
+.map { border-collapse: collapse; width: 100%; }
+.map td { padding: 0.2rem 0; border-bottom: 0.06rem solid #2f2a3a; }
+.map td:last-child { text-align: right; font-weight: 700; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 6rem; transform: translateX(-50%); z-index: 50;
+  background: #2b2638; color: #fff; padding: 0.9rem 1.8rem; border-radius: 0.8rem; font-size: 1.2rem;
+  box-shadow: 0 0.6rem 2rem rgba(0,0,0,0.5);
+}
+
+/* ---------- Canto: TV e joysticks ---------- */
+.top { align-items: flex-start; }
+.brand { align-items: center; }
+.corner { display: flex; flex-direction: column; align-items: flex-end; max-width: 46%; }
+.ico { width: 1.6rem; height: 1.6rem; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6;
+  stroke-linecap: round; stroke-linejoin: round; margin-right: 0.7rem; }
+.tv-info, .pad-info {
+  display: flex; align-items: center; background: rgba(255,255,255,0.05);
+  border: 0.06rem solid rgba(255,255,255,0.08); border-radius: 0.8rem; padding: 0.55rem 1rem;
+}
+.tv-info { color: var(--focus); }
+.tv-info div { display: flex; flex-direction: column; line-height: 1.35; text-align: right; }
+.tv-info b { color: var(--ink); font-size: 1.05rem; }
+.tv-info span { color: var(--muted); font-size: 0.82rem; }
+.tv-info span:empty { display: none; }
+.pad-info { margin-top: 0.5rem; color: var(--muted); font-size: 0.85rem; }
+.pad-info.on { color: #8fe3a5; border-color: rgba(143,227,165,0.35); }
+.pad-info.on #pad-text { color: var(--ink); }
+
+/* ---------- Assistente do joystick ---------- */
+.panel.wiz { width: 46rem; text-align: center; }
+.snes-pad { width: 28rem; max-width: 100%; margin: 0.8rem auto 0.4rem; display: block; }
+.snes-pad .body { fill: #c9c5d1; }
+.snes-pad .part { fill: #3a3546; transition: fill 0.15s; }
+.snes-pad .hub { fill: #3a3546; }
+.snes-pad .c-af { fill: #7a2d30; } .snes-pad .c-bf { fill: #7d6520; }
+.snes-pad .c-xf { fill: #2b3f74; } .snes-pad .c-yf { fill: #255636; }
+.snes-pad .part.done { opacity: 0.55; }
+.snes-pad .part.on { fill: var(--focus); opacity: 1; animation: blink 0.9s ease-in-out infinite; }
+@keyframes blink { 50% { fill: #fff; } }
+.wiz-ask { font-size: 1.7rem; font-weight: 800; margin: 0.6rem 0 0.2rem; }
+.wiz-msg { color: #ffb36b; min-height: 1.4rem; margin: 0 0 0.6rem; }
