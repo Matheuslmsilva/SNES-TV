@@ -348,6 +348,7 @@
     // navegador da TV não abre arquivos; no PC/celular o seletor funciona
     var tvBrowser = /SMART-TV|Tizen|Web0S|NetCast|HbbTV/i.test(navigator.userAgent);
     if (!IS_TIZEN && !tvBrowser) items.unshift({ action: "open", title: "Abrir arquivos…", meta: "Escolher .sfc / .smc / .zip" });
+    items.unshift({ action: "ach", title: "Conquistas", meta: Conquistas.count() + " de " + Conquistas.total() });
     items.unshift({ action: "pair", title: "Celular como controle", meta: ctrlCount() ? ctrlCount() + " conectado(s)" : "Ler QR Code no celular" });
     items.unshift({ action: "phone", title: "Adicionar pelo celular", meta: "Ler QR Code e enviar jogos" });
     $("empty").hidden = items.length > 0;
@@ -358,7 +359,7 @@
       var el = document.createElement("div");
       el.className = "tile" + (g.action ? " action" : "");
       el.setAttribute("role", "option");
-      var initial = g.action === "pair" ? "PAD" : g.action === "phone" ? "QR" : g.action ? "+" : (g.title.match(/[A-Za-z0-9À-ú]/) || ["?"])[0].toUpperCase();
+      var initial = g.action === "ach" ? "★" : g.action === "pair" ? "PAD" : g.action === "phone" ? "QR" : g.action ? "+" : (g.title.match(/[A-Za-z0-9À-ú]/) || ["?"])[0].toUpperCase();
       var hue = g.action ? 250 : hashHue(g.title);
       var meta = g.action ? g.meta :
         [g.region, fmtSize(g.size), g.source === "usb" ? "USB" : g.source === "pc" ? "PC" : g.source === "local" ? "salvo" : ""].filter(Boolean).join(" · ");
@@ -419,6 +420,7 @@
     if (g.action === "open") { $("file-input").click(); return; }
     if (g.action === "phone") { openPhone(); return; }
     if (g.action === "pair") { openPair("launcher"); return; }
+    if (g.action === "ach") { openAch("launcher"); return; }
     startGame(g);
   }
 
@@ -533,6 +535,9 @@
         focusEmu();
         fitPlayer();
         startFps();
+        Conquistas.detect(null);
+        Conquistas.gameStarted(gameKey(g));
+        startAchTimer();
       };
 
       var s = document.createElement("script");
@@ -575,6 +580,10 @@
       state.view = "game";
       fitPlayer();
       startFps();
+      Conquistas.detect(LITE.rom);
+      Conquistas.gameStarted(gameKey(g));
+      startAchTimer();
+      if (Conquistas.game) toast("★ Conquistas de " + Conquistas.games[Conquistas.game].name + " ativas", 2600);
     }).catch(function (e) {
       console.error(e);
       fail("Este jogo não abriu no emulador TV antiga. Mudei para o TV nova — abra o jogo de novo.");
@@ -801,7 +810,7 @@
     if (act === "save") {
       try {
         var data = E.getState();
-        dbPut(key, data).then(function () { toast("Estado salvo"); closeMenu(); },
+        dbPut(key, data).then(function () { toast("Estado salvo"); Conquistas.unlock("gen_save"); closeMenu(); },
           function () { toast("Não foi possível salvar o estado"); });
       } catch (e) { toast("Não foi possível salvar o estado"); }
       return;
@@ -851,12 +860,14 @@
     }
     if (act === "controls") { openHelp("menu"); return; }
     if (act === "pair") { openPair("menu"); return; }
+    if (act === "ach") { openAch("menu"); return; }
     if (act === "exit") return exitGame();
   }
 
   function exitGame(msg) {
     $("menu").hidden = true;
     showLoading(state.current, typeof msg === "string" ? msg : "Salvando…");
+    Conquistas.flush();
     Promise.resolve(E.saveSram()).catch(function () {}).then(function () {
       if (LITE) LITE.stop();
       setTimeout(function () { location.reload(); }, 300);
@@ -893,7 +904,7 @@
       var map = IS_TIZEN ? TV_KEYS : PC_KEYS;
       if (map[c] !== undefined) {
         e.preventDefault(); e.stopPropagation();
-        if (!state.held[c]) { state.held[c] = map[c]; press(map[c], true); }
+        if (!state.held[c]) { state.held[c] = map[c]; press(map[c], true); Conquistas.input(); }
       }
       return;
     }
@@ -922,6 +933,10 @@
       if (c === K.ENTER || isBack(c)) closeHelp();
     } else if (state.view === "phone") {
       if (isBack(c) || c === K.ENTER) closePhone();
+    } else if (state.view === "ach") {
+      if (isBack(c) || c === K.ENTER) closeAch();
+      else if (c === K.DOWN) scrollAch(1);
+      else if (c === K.UP) scrollAch(-1);
     } else if (state.view === "pair") {
       if (isBack(c) || c === K.ENTER) closePair();
       else if (c === K.RED || c === 82) { stopCtrl(); toast("Celulares desconectados", 2000); closePair(); }
@@ -1094,6 +1109,17 @@
           if ((any[BTN.SELECT] && any[BTN.START]) || hit("menu")) { openMenu(); }
           else {
             feedGame(states);
+            var anyKey = false;
+            for (var ak in any) { anyKey = true; break; }
+            if (anyKey) {
+              Conquistas.input();
+              for (var pi = 0; pi < Math.min(pads.length, 4); pi++) {
+                var pst = readPad(pads[pi]);
+                for (var pk in pst) { state.usedPad = true; break; }
+              }
+              ctrl.states.forEach(function (st) { if (st) for (var ck in st) { state.usedPhone = true; break; } });
+              for (var qi = 1; qi < states.length; qi++) for (var qk in states[qi]) { state.usedCoop = true; break; }
+            }
             if (!!any.turbo !== !!state.padTurbo) {
               state.padTurbo = !!any.turbo;
               E.turbo(state.padTurbo || state.turbo);
@@ -1111,6 +1137,10 @@
           if (back || hit(BTN.B) || hit(BTN.A)) closePhone();
         } else if (state.view === "pair") {
           if (back) closePair();
+        } else if (state.view === "ach") {
+          if (back || ok) closeAch();
+          if (down) scrollAch(1);
+          if (up) scrollAch(-1);
         }
         padPrev = any;
       }
@@ -1399,6 +1429,7 @@
         if (f.bad || f.got !== f.size) { f.row.textContent = f.name + " — falhou"; conn.send({ t: "fail", id: f.id, msg: "chegou incompleto" }); return; }
         romsPut({ name: f.name, size: f.size, data: f.buf.buffer, added: Date.now() }).then(function () {
           f.row.textContent = f.name + " — salvo ✓";
+          Conquistas.unlock("gen_send");
           f.row.className = "ok";
           phone && phone.received++;
           conn.send({ t: "saved", id: f.id });
@@ -1545,10 +1576,96 @@
   }
 
   // ====================================================================
+  // Conquistas: verificação, aviso na tela e tela de conquistas
+  // ====================================================================
+  var achTimer = null;
+  function startAchTimer() {
+    clearInterval(achTimer);
+    state.usedPad = state.usedPhone = state.usedCoop = false;
+    achTimer = setInterval(function () {
+      if (state.view !== "game") return;
+      Conquistas.tick(0.5, {
+        crt: crtOn(),
+        phones: state.usedPhone,
+        pads: state.usedPad,
+        coop: state.usedCoop,
+        mem: LITE ? LITE.mem() : null
+      });
+    }, 500);
+  }
+
+  var achQueue = [], achShowing = false;
+  function showAch(d) {
+    achQueue.push(d);
+    if (!achShowing) nextAch();
+  }
+  function nextAch() {
+    var d = achQueue.shift();
+    if (!d) { achShowing = false; $("ach-toast").hidden = true; return; }
+    achShowing = true;
+    $("ach-toast-t").textContent = d.t;
+    $("ach-toast-d").textContent = d.d;
+    var el = $("ach-toast");
+    el.hidden = true; void el.offsetWidth; el.hidden = false;   // reinicia a animação
+    setTimeout(nextAch, 4200);
+  }
+
+  function openAch(from) {
+    state.achFrom = from;
+    state.view = "ach";
+    $("menu").hidden = true;
+    $("ach").hidden = false;
+    $("ach-count").textContent = "★ " + Conquistas.count() + " de " + Conquistas.total();
+    var html = '<div class="ach-inner" id="ach-inner">';
+    var order = ["gen", "smw", "alttp", "sm", "smk"];
+    // jogo atual primeiro
+    if (state.view === "ach" && from === "menu" && Conquistas.game) {
+      order = [Conquistas.game].concat(order.filter(function (g) { return g !== Conquistas.game; }));
+    }
+    order.forEach(function (g) {
+      var list = Conquistas.defs.filter(function (d) { return d.g === g; });
+      var got = list.filter(function (d) { return Conquistas.isUnlocked(d.id); }).length;
+      html += '<div class="ach-group">' + Conquistas.groups[g] + ' — ' + got + '/' + list.length + '</div><div class="ach-grid">';
+      list.forEach(function (d) {
+        var on = Conquistas.isUnlocked(d.id);
+        html += '<div class="ach-item' + (on ? ' on' : '') + '"><i>' + (on ? '★' : '☆') + '</i><div><b></b><span></span></div></div>';
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+    $("ach-list").innerHTML = html;
+    // textos com textContent (seguro)
+    var items = $("ach-list").querySelectorAll(".ach-item"), k = 0;
+    order.forEach(function (g) {
+      Conquistas.defs.filter(function (d) { return d.g === g; }).forEach(function (d) {
+        items[k].querySelector("b").textContent = d.t;
+        items[k].querySelector("span").textContent = d.d;
+        k++;
+      });
+    });
+    state.achScroll = 0;
+    scrollAch(0);
+  }
+  function scrollAch(dir) {
+    var inner = $("ach-inner"), box = $("ach-list");
+    if (!inner) return;
+    var max = Math.max(0, inner.offsetHeight - box.clientHeight);
+    state.achScroll = Math.max(0, Math.min(max, (state.achScroll || 0) + dir * box.clientHeight * 0.5));
+    inner.style.transform = "translateY(" + (-state.achScroll) + "px)";
+  }
+  function closeAch() {
+    $("ach").hidden = true;
+    padPrev = {};
+    if (state.achFrom === "menu") { state.view = "menu"; $("menu").hidden = false; }
+    else { state.view = "launcher"; renderGrid(); }
+  }
+
+  // ====================================================================
   // Início
   // ====================================================================
   function init() {
     registerTvKeys();
+    Conquistas.onUnlock = showAch;
     showDeviceInfo();
     if (ctrlEnabled()) startCtrl();
     refresh(true);

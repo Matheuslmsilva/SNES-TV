@@ -219,6 +219,34 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 .crt { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; }
 #game.crt-on.light canvas { image-rendering: auto; }
 
+/* ---------- Conquistas ---------- */
+.ach-toast {
+  position: fixed; top: 2.2rem; left: 50%; transform: translateX(-50%); z-index: 60;
+  display: flex; align-items: center; background: #221d2c; border: 0.12rem solid #e8b71f;
+  border-radius: 1rem; padding: 0.9rem 1.6rem 0.9rem 1.1rem; box-shadow: 0 0.8rem 2.4rem rgba(0,0,0,0.6);
+  animation: achIn 0.4s ease-out;
+}
+@keyframes achIn { from { transform: translate(-50%, -150%); } to { transform: translate(-50%, 0); } }
+.ach-toast .ach-star { font-style: normal; font-size: 2.6rem; color: #e8b71f; margin-right: 1rem; line-height: 1; text-shadow: 0 0 1rem rgba(232,183,31,0.6); }
+.ach-toast div { display: flex; flex-direction: column; line-height: 1.3; }
+.ach-toast small { color: #e8b71f; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; }
+.ach-toast b { font-size: 1.3rem; }
+.ach-toast span { color: var(--muted); font-size: 0.95rem; }
+.panel.ach-panel { width: 70rem; max-width: 92vw; }
+.ach-head { display: flex; align-items: baseline; justify-content: space-between; }
+.ach-count { color: #e8b71f; font-weight: 800; font-size: 1.2rem; }
+.ach-list { height: 34rem; max-height: 62vh; overflow: hidden; position: relative; }
+.ach-inner { transition: transform 0.2s ease; }
+.ach-group { color: var(--focus); font-weight: 800; margin: 1rem 0 0.4rem; font-size: 1.1rem; }
+.ach-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1rem; }
+.ach-item { display: flex; align-items: center; background: rgba(255,255,255,0.04); border-radius: 0.7rem; padding: 0.55rem 0.9rem; }
+.ach-item i { font-style: normal; font-size: 1.5rem; width: 2rem; color: #4a4458; }
+.ach-item.on i { color: #e8b71f; }
+.ach-item div { display: flex; flex-direction: column; line-height: 1.3; }
+.ach-item b { font-size: 1rem; color: #8d879a; }
+.ach-item.on b { color: var(--ink); }
+.ach-item span { font-size: 0.82rem; color: var(--muted); }
+
 /* ---------- Motor TV antiga ---------- */
 #game.lite #player { width: 100%; height: 100%; }
 .lite-canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; background: #000; }

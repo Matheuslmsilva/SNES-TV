@@ -86,6 +86,7 @@
       <li data-act="perf">Desempenho: <b id="perf-state">velocidade máxima</b></li>
       <li data-act="fps">Mostrar FPS: <b id="fps-state">não</b></li>
       <li data-act="restart">Reiniciar o jogo</li>
+      <li data-act="ach">Conquistas</li>
       <li data-act="pair">Celular como controle</li>
       <li data-act="controls">Ver controles</li>
       <li data-act="exit">Sair para a lista de jogos</li>
@@ -206,10 +207,28 @@
   </div>
 </div>
 
+<!-- ============ CONQUISTAS ============ -->
+<div id="ach" class="overlay" hidden>
+  <div class="panel ach-panel">
+    <div class="ach-head">
+      <h2>Conquistas</h2>
+      <span id="ach-count" class="ach-count"></span>
+    </div>
+    <div id="ach-list" class="ach-list"></div>
+    <p class="muted small center"><kbd>▲ ▼</kbd> rolar · <kbd>VOLTAR</kbd> fechar ·
+      As conquistas de jogo funcionam no emulador TV antiga</p>
+  </div>
+</div>
+<div id="ach-toast" class="ach-toast" hidden>
+  <i class="ach-star">★</i>
+  <div><small>Conquista desbloqueada</small><b id="ach-toast-t"></b><span id="ach-toast-d"></span></div>
+</div>
+
 <div id="toast" class="toast" hidden></div>
 <input id="file-input" type="file" multiple hidden>
 
 <script src="$WEBAPIS/webapis/webapis.js"></script>
+<script src="js/conquistas.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

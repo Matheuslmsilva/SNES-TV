@@ -27,6 +27,7 @@
     var self = this, o = this.opts;
     var u8 = romBytes instanceof Uint8Array ? romBytes : new Uint8Array(romBytes);
     if (u8[0] === 0x50 && u8[1] === 0x4b) u8 = unzipRom(u8);   // "PK" = zip
+    this.rom = u8;
 
     return Snes2005().then(function (M) {
       self.M = M;
@@ -239,6 +240,24 @@
     var ok = M._s_state_load(p, data.length);
     M._free(p);
     return !!ok;
+  };
+
+  // leitura da memória do SNES (endereços $7E0000-$7FFFFF) — usada pelas conquistas
+  LiteSNES.prototype.mem = function () {
+    var M = this.M; if (!M || !M._s_ram) return null;
+    var ptr = M._s_ram(), buf = M.HEAPU8.buffer;
+    if (!ptr) return null;
+    if (this.rBuf !== buf || this.rPtr !== ptr) { this.rView = new Uint8Array(buf, ptr, 0x20000); this.rBuf = buf; this.rPtr = ptr; }
+    var r = this.rView;
+    if (!this.memApi) this.memApi = {
+      u8: function (a) { return r[(a - 0x7E0000) & 0x1FFFF]; },
+      u16: function (a) { var o = (a - 0x7E0000) & 0x1FFFF; return r[o] | (r[(o + 1) & 0x1FFFF] << 8); }
+    };
+    // atualiza a referência caso a memória tenha crescido
+    var self = this;
+    this.memApi.u8 = function (a) { return self.rView[(a - 0x7E0000) & 0x1FFFF]; };
+    this.memApi.u16 = function (a) { var o = (a - 0x7E0000) & 0x1FFFF; return self.rView[o] | (self.rView[(o + 1) & 0x1FFFF] << 8); };
+    return this.memApi;
   };
 
   LiteSNES.prototype.stop = function () {
