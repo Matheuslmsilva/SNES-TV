@@ -69,6 +69,12 @@
       '<path d="M15 12v10M10 17h10" stroke="#332e45" stroke-width="3.5" stroke-linecap="round"/>' +
       '<circle cx="46" cy="12.5" r="3.2" fill="#3a63c8"/><circle cx="52" cy="18" r="3.2" fill="#d6383c"/>' +
       '<circle cx="46" cy="23.5" r="3.2" fill="#e8b71f"/><circle cx="40" cy="18" r="3.2" fill="#2f9a4e"/></svg>',
+    net: '<svg viewBox="0 0 64 44" aria-hidden="true"><rect x="2" y="6" width="24" height="17" rx="2" fill="#ece9f2"/><rect x="5" y="9" width="18" height="11" fill="#6c5fc7"/>' +
+      '<path d="M10 27h8" stroke="#ece9f2" stroke-width="3" stroke-linecap="round"/>' +
+      '<rect x="38" y="6" width="24" height="17" rx="2" fill="#ece9f2"/><rect x="41" y="9" width="18" height="11" fill="#3a63c8"/>' +
+      '<path d="M46 27h8" stroke="#ece9f2" stroke-width="3" stroke-linecap="round"/>' +
+      '<path d="M22 37c6 6 14 6 20 0" stroke="#8fe3a5" stroke-width="3" fill="none" stroke-linecap="round"/>' +
+      '<path d="M40 33l3 4-5 1" stroke="#8fe3a5" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     phone: '<svg viewBox="0 0 56 48" aria-hidden="true"><path d="M8 4h32a3 3 0 0 1 3 3v26h-4v8H12v-8H5V7a3 3 0 0 1 3-3z" fill="#cfcbd6"/>' +
       '<path d="M9 7h30" stroke="#a9a4b3" stroke-width="2" stroke-dasharray="2 2"/>' +
       '<rect x="10" y="11" width="28" height="15" rx="2" fill="#6c5fc7"/>' +
@@ -371,6 +377,7 @@
     // navegador da TV não abre arquivos; no PC/celular o seletor funciona
     var tvBrowser = /SMART-TV|Tizen|Web0S|NetCast|HbbTV/i.test(navigator.userAgent);
     if (!IS_TIZEN && !tvBrowser) items.unshift({ action: "open", title: "Abrir arquivos…", meta: "Escolher .sfc / .smc / .zip" });
+    items.unshift({ action: "net", title: "Jogar online", meta: "Com outra TV, por código" });
     items.unshift({ action: "ach", title: "Conquistas", meta: Conquistas.count() + " de " + Conquistas.total() });
     items.unshift({ action: "pair", title: "Celular como controle", meta: ctrlCount() ? ctrlCount() + " conectado(s)" : "Ler QR Code no celular" });
     items.unshift({ action: "phone", title: "Adicionar pelo celular", meta: "Ler QR Code e enviar jogos" });
@@ -458,6 +465,8 @@
     if (g.action === "phone") { openPhone(); return; }
     if (g.action === "pair") { openPair("launcher"); return; }
     if (g.action === "ach") { openAch("launcher"); return; }
+    if (g.action === "net") { openNet(); return; }
+    if (state.netPick) { netHost(g); return; }
     startGame(g);
   }
 
@@ -526,14 +535,15 @@
     $("loading").hidden = false;
   }
 
-  function startGame(g) {
+  function startGame(g, net) {
     state.view = "loading";
+    state.net = net || null;
     state.current = g;
     showLoading(g, g.source === "usb" ? "Lendo do pen drive…" : "Carregando " + g.title + "…");
     store("snestv.last", gameKey(g));
 
     getRomBytes(g).then(function (data) {
-      if (engineName() === "lite" && !/\.7z$/i.test(g.name)) return startLite(g, data);
+      if (net || (engineName() === "lite" && !/\.7z$/i.test(g.name))) return startLite(g, data, net);
       var file = data instanceof File ? data : new File([data], g.name, { type: "application/octet-stream" });
       $("loading-text").textContent = "Iniciando " + g.title + "…";
       $("launcher").hidden = true;
@@ -593,7 +603,7 @@
     });
   }
 
-  function startLite(g, data) {
+  function startLite(g, data, net) {
     $("loading-text").textContent = "Iniciando " + g.title + "…";
     $("launcher").hidden = true;
     $("game").hidden = false;
@@ -607,8 +617,9 @@
     return libs.then(function () { return bytes; }).then(function (buf) {
       LITE = new LiteSNES({
         container: $("player"),
-        loadSram: function () { return dbGet(key).then(function (d) { return d ? new Uint8Array(d) : null; }, function () { return null; }); },
-        saveSram: function (u8) { return dbPut(key, u8.buffer); }
+        // convidado do jogo online usa o save do anfitrião e não grava por cima do próprio
+        loadSram: net && net.role === "guest" ? null : function () { return dbGet(key).then(function (d) { return d ? new Uint8Array(d) : null; }, function () { return null; }); },
+        saveSram: net && net.role === "guest" ? null : function (u8) { return dbPut(key, u8.buffer); }
       });
       window.SNESTV_LITE = LITE;   // para diagnóstico
       fitPlayer();
@@ -622,9 +633,11 @@
       learnCover(g, LITE.rom);
       Conquistas.gameStarted(gameKey(g));
       startAchTimer();
+      if (net) { netOnLiteReady(); return; }
       if (Conquistas.game) toast("★ Conquistas de " + Conquistas.games[Conquistas.game].name + " ativas", 2600);
     }).catch(function (e) {
       console.error(e);
+      if (net) { fail("Não foi possível abrir o jogo online."); return; }
       fail("Este jogo não abriu no emulador TV antiga. Mudei para o TV nova — abra o jogo de novo.");
       try { localStorage.setItem("snestv.engine", "ejs"); } catch (err) {}
     });
@@ -847,6 +860,9 @@
     var act = $("menu-list").children[state.menuFocus].getAttribute("data-act");
     var key = (LITE ? "state2005:" : "state:") + gameKey(state.current);
     if (act === "resume") return closeMenu();
+    if (LITE && LITE.net && /^(save|load|turbo|restart|engine|perf)$/.test(act)) {
+      toast("Desativado no jogo online (as duas TVs precisam ficar iguais)", 3000); return;
+    }
     if (act === "save") {
       try {
         var data = E.getState();
@@ -906,6 +922,7 @@
   }
 
   function exitGame(msg) {
+    netEnd();
     $("menu").hidden = true;
     showLoading(state.current, typeof msg === "string" ? msg : "Salvando…");
     Conquistas.flush();
@@ -940,6 +957,12 @@
     var c = e.keyCode;
     if (c === K.EXIT) return;   // deixa a TV tratar o EXIT
 
+    if (state.view === "net" && state.netMode === "join") {
+      if (c === K.ENTER || c === 65376) { e.preventDefault(); netJoin(); }
+      else if (c === K.BACK || c === K.ESC || c === 65385) { e.preventDefault(); closeNet(); }
+      return;                    // deixa digitar o código
+    }
+
     if (state.view === "name") {
       // 65376 = "Concluído" do teclado da Samsung
       if (c === K.ENTER || c === 65376) { e.preventDefault(); saveName(); }
@@ -970,7 +993,10 @@
       else if (c === K.BLUE || c === 72 /* H */) openHelp("launcher");
       else if (c === K.GREEN || c === 71 /* G */) openWizard();
       else if (c === K.YELLOW || c === 46 /* Delete */) removeFocused();
-      else if (c === K.BACK) quitApp();
+      else if (c === K.BACK) {
+        if (state.netPick) { state.netPick = false; $("net-banner").hidden = true; toast("Partida online cancelada", 1800); }
+        else quitApp();
+      }
     } else if (state.view === "menu") {
       var n = $("menu-list").children.length;
       if (c === K.UP) { state.menuFocus = (state.menuFocus + n - 1) % n; paintMenu(); }
@@ -981,6 +1007,12 @@
       if (c === K.ENTER || isBack(c)) closeHelp();
     } else if (state.view === "phone") {
       if (isBack(c) || c === K.ENTER) closePhone();
+    } else if (state.view === "net") {
+      if (state.netMode === "home") {
+        if (c === K.LEFT || c === K.RIGHT) { state.netBtn = state.netBtn ? 0 : 1; paintNetBtns(); }
+        else if (c === K.ENTER) { if (state.netBtn === 0) netCreate(); else netShow("join"); }
+        else if (isBack(c)) closeNet();
+      } else if (isBack(c)) closeNet();
     } else if (state.view === "ach") {
       if (isBack(c) || c === K.ENTER) closeAch();
       else if (c === K.DOWN) scrollAch(1);
@@ -1157,7 +1189,7 @@
           if ((any[BTN.SELECT] && any[BTN.START]) || hit("menu")) { openMenu(); }
           else {
             // 3º ou 4º jogador presente → liga o Multitap (motor TV antiga)
-            if (LITE) {
+            if (LITE && !LITE.net) {
               var need = !!(ctrl.conns[2] || ctrl.conns[3] || pads.length >= 3);
               if (need !== !!state.multitap) {
                 state.multitap = need;
@@ -1853,7 +1885,8 @@
     phone: "Mande jogos do celular para a TV: leia o QR Code com a câmera, escolha os arquivos .sfc, .smc ou .zip e eles ficam salvos aqui.",
     pair: "Transforme o celular num controle de Super Nintendo. Até 4 celulares, um para cada jogador. Eles se reconectam sozinhos.",
     ach: "Todas as conquistas num lugar só: as gerais, que valem para qualquer jogo, e as de Super Mario World, Zelda, Super Metroid e Super Mario Kart.",
-    open: "Escolha arquivos .sfc, .smc ou .zip deste aparelho. Eles ficam salvos para a próxima vez."
+    open: "Escolha arquivos .sfc, .smc ou .zip deste aparelho. Eles ficam salvos para a próxima vez.",
+    net: "Jogue com um amigo em outra TV, pela internet. Uma TV cria a partida e recebe um código; a outra entra com esse código. As duas precisam ter o mesmo arquivo do jogo."
   };
   var detKey = null;
 
@@ -1967,6 +2000,262 @@
   $("name-input").addEventListener("change", function () {
     if (state.view === "name" && $("name-input").value.replace(/\s/g, "")) saveName();
   });
+
+  // ====================================================================
+  // Jogar online: duas TVs, cada uma é um jogador (lockstep pela internet)
+  // ====================================================================
+  var NET = null;   // { role, peer, conn, code, game, hash, delay, rtt, started }
+
+  function netLibs() {
+    var chain = Promise.resolve();
+    if (!window.fflate) chain = chain.then(function () { return loadScript("lib/fflate.js"); });
+    if (!window.Snes2005) chain = chain.then(function () { return loadScript(window.SNES_HAS_WASM ? "lite/snes2005.js" : "lite/snes2005-asm.js"); });
+    if (!window.LiteSNES) chain = chain.then(function () { return loadScript("lite/lite.js"); });
+    if (!(window.Peer || window.peerjs)) chain = chain.then(function () { return loadScript("lib/peerjs.min.js"); });
+    return chain;
+  }
+
+  // impressão digital do jogo (ROM descompactada) para garantir que é o mesmo arquivo
+  function romOf(data) {
+    var u8 = data instanceof Uint8Array ? data : new Uint8Array(data);
+    if (u8[0] === 0x50 && u8[1] === 0x4b && window.fflate) {
+      var files = fflate.unzipSync(u8, { filter: function (f) { return /\.(sfc|smc|swc|fig)$/i.test(f.name); } });
+      var k = Object.keys(files); if (k.length) u8 = files[k[0]];
+    }
+    return u8;
+  }
+  function fnv(u8) {
+    var h = 2166136261;
+    for (var i = 0; i < u8.length; i++) { h ^= u8[i]; h = (h * 16777619) >>> 0; }
+    return ("00000000" + h.toString(16)).slice(-8) + "-" + u8.length;
+  }
+  function bytesOf(g) {
+    return getRomBytes(g).then(function (d) {
+      return (typeof Blob !== "undefined" && d instanceof Blob) ? readAsBuffer(d) : d;
+    });
+  }
+
+  // ---------------- telas ----------------
+  function netShow(mode) {
+    state.view = "net";
+    state.netMode = mode;
+    $("net").hidden = false;
+    ["home", "host", "join"].forEach(function (m) { $("net-" + m).hidden = m !== mode; });
+    if (mode === "home") { state.netBtn = state.netBtn || 0; paintNetBtns(); }
+    if (mode === "join") setTimeout(function () { try { $("net-code").focus(); } catch (e) {} }, 80);
+  }
+  function paintNetBtns() {
+    var b = $("net-home").querySelectorAll(".net-btn");
+    for (var i = 0; i < b.length; i++) b[i].classList.toggle("focused", i === state.netBtn);
+  }
+  function netStatus(text, kind) { var el = $("net-st-" + state.netMode); if (el) { el.textContent = text; el.className = "phone-status " + (kind || ""); } }
+  function openNet() { netShow("home"); }
+  function closeNet(keep) {
+    $("net").hidden = true;
+    state.view = "launcher";
+    padPrev = {};
+    try { $("net-code").blur(); } catch (e) {}
+    if (!keep) netEnd();
+    $("net-banner").hidden = !state.netPick;
+  }
+  function netEnd() {
+    if (NET) {
+      try { if (NET.conn) NET.conn.close(); } catch (e) {}
+      try { if (NET.peer) NET.peer.destroy(); } catch (e) {}
+    }
+    NET = null;
+  }
+
+  // ---------------- anfitrião ----------------
+  function netCreate() {
+    state.netPick = true;
+    closeNet(true);
+    $("net-banner").hidden = false;
+    toast("Escolha na lista o jogo da partida online e aperte OK", 3500);
+  }
+
+  function netHost(g) {
+    state.netPick = false;
+    $("net-banner").hidden = true;
+    netShow("host");
+    $("net-code-big").textContent = "······";
+    $("net-game").textContent = g.title;
+    netStatus("Preparando…");
+    var code = newCode();
+    NET = { role: "host", code: code, game: g };
+    netLibs().then(function () { return bytesOf(g); }).then(function (data) {
+      NET.hash = fnv(romOf(data));
+      var P = window.Peer || window.peerjs.Peer;
+      var peer = new P("snestv-net-" + code);
+      NET.peer = peer;
+      peer.on("open", function () {
+        $("net-code-big").textContent = code;
+        netStatus("Passe o código para o seu amigo. Aguardando a outra TV…");
+      });
+      peer.on("error", function (e) {
+        if (e.type === "unavailable-id") { netEnd(); netHost(g); return; }
+        netStatus("Sem conexão com a internet (" + e.type + ")", "err");
+      });
+      peer.on("connection", function (conn) {
+        if (NET.conn) { try { conn.close(); } catch (e) {} return; }   // só uma TV convidada
+        NET.conn = conn;
+        conn.on("open", function () { netStatus("Outra TV conectada. Conferindo o jogo…", "ok"); });
+        conn.on("data", netData);
+        conn.on("close", netLost);
+      });
+    }).catch(function (e) { console.error(e); netStatus("Não foi possível preparar o jogo", "err"); });
+  }
+
+  // ---------------- convidado ----------------
+  function netJoin() {
+    var code = ($("net-code").value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (code.length !== 6) { netStatus("O código tem 6 letras/números", "err"); return; }
+    try { $("net-code").blur(); } catch (e) {}
+    netStatus("Conectando à outra TV…");
+    NET = { role: "guest", code: code };
+    netLibs().then(function () {
+      var P = window.Peer || window.peerjs.Peer;
+      var peer = new P();
+      NET.peer = peer;
+      peer.on("open", function () {
+        var conn = peer.connect("snestv-net-" + code, { reliable: true, serialization: "binary", metadata: { name: userName() } });
+        NET.conn = conn;
+        conn.on("open", function () { conn.send({ t: "hello", name: userName() || "Amigo" }); netStatus("Conectado! Recebendo o jogo da partida…", "ok"); });
+        conn.on("data", netData);
+        conn.on("close", netLost);
+      });
+      peer.on("error", function (e) {
+        netStatus(e.type === "peer-unavailable" ? "Não achei a partida. Confira o código e se a outra TV está na tela do código." :
+          "Sem conexão com a internet (" + e.type + ")", "err");
+      });
+    });
+  }
+
+  // procura na lista desta TV o mesmo arquivo de jogo
+  function netFind(title, hash) {
+    var want = normTitle(title);
+    var list = state.games.slice().sort(function (a, b) {
+      return (normTitle(b.title) === want ? 1 : 0) - (normTitle(a.title) === want ? 1 : 0);
+    });
+    var i = 0;
+    function next() {
+      if (i >= list.length) return Promise.resolve(null);
+      var g = list[i++];
+      return bytesOf(g).then(function (d) { return fnv(romOf(d)) === hash ? g : next(); }, next);
+    }
+    return next();
+  }
+
+  // ---------------- mensagens ----------------
+  function netData(d) {
+    if (!d || !NET) return;
+    if (LITE && LITE.net && (d.t === "in" || d.t === "chk")) { LITE.netRecv(d); return; }
+    var c = NET.conn;
+    if (d.t === "ping") { c.send({ t: "pong", s: d.s }); return; }
+    if (d.t === "pong") { NET.rtt = Math.round(performance.now() - d.s); if (NET.onPong) NET.onPong(); return; }
+
+    if (NET.role === "host") {
+      if (d.t === "hello") {
+        NET.friend = d.name || "Amigo";
+        netStatus(NET.friend + " conectou. Conferindo se a TV dele tem o mesmo jogo…", "ok");
+        c.send({ t: "game", title: NET.game.title, hash: NET.hash, host: userName() || "Amigo" });
+      } else if (d.t === "nogame") {
+        netStatus("A outra TV não tem este jogo. Precisa ser exatamente o mesmo arquivo.", "err");
+      } else if (d.t === "ready") {
+        netStatus("Medindo a conexão…", "ok");
+        var tries = 0, best = 9999;
+        NET.onPong = function () {
+          best = Math.min(best, NET.rtt);
+          if (++tries < 5) c.send({ t: "ping", s: performance.now() });
+          else { NET.onPong = null; NET.rtt = best; netBegin(); }
+        };
+        c.send({ t: "ping", s: performance.now() });
+      } else if (d.t === "go") {
+        LITE.net.syncing = false;
+        LITE.play();
+        netStarted();
+      } else if (d.t === "desync") {
+        netResync();
+      } else if (d.t === "synced") {
+        if (LITE && LITE.net) LITE.net.syncing = false;
+      }
+    } else {
+      if (d.t === "game") {
+        NET.friend = d.host || "Amigo";
+        netStatus(NET.friend + " escolheu " + d.title + ". Procurando o jogo nesta TV…", "ok");
+        netFind(d.title, d.hash).then(function (g) {
+          if (!g) { c.send({ t: "nogame" }); netStatus("Esta TV não tem " + d.title + " (precisa ser o mesmo arquivo).", "err"); return; }
+          NET.game = g;
+          c.send({ t: "ready" });
+          netStatus("Jogo encontrado! Aguardando " + NET.friend + "…", "ok");
+        });
+      } else if (d.t === "start") {
+        NET.delay = d.delay;
+        NET.startState = d.state; NET.startSram = d.sram;
+        startGame(NET.game, { role: "guest" });
+      } else if (d.t === "sync") {
+        if (LITE && LITE.net) { LITE.netApply(d.f, d.state); c.send({ t: "synced" }); }
+      }
+    }
+  }
+
+  // anfitrião: abre o jogo, tira a "foto" do estado e manda para a outra TV
+  function netBegin() {
+    // atraso: metade da ida-e-volta em quadros + folga
+    NET.delay = Math.max(3, Math.min(10, Math.ceil(NET.rtt / 2 / 16.7) + 2));
+    startGame(NET.game, { role: "host" });
+  }
+  function netOnLiteReady() {
+    var c = NET.conn;
+    if (NET.role === "host") {
+      LITE.pause();
+      var st = LITE.getState(), v = LITE.sramView();
+      LITE.startNet({ role: "host", delay: NET.delay, send: function (m) { try { c.send(m); } catch (e) {} }, onDesync: netResync });
+      LITE.net.syncing = true;          // espera o "go" da outra TV
+      c.send({ t: "start", delay: NET.delay, state: st.buffer, sram: v ? new Uint8Array(v).buffer : null });
+      $("loading").hidden = false;
+      $("loading-text").textContent = "Esperando " + (NET.friend || "a outra TV") + " carregar…";
+    } else {
+      if (NET.startSram) LITE.writeSram(new Uint8Array(NET.startSram));
+      LITE.loadState(new Uint8Array(NET.startState));
+      LITE.startNet({ role: "guest", delay: NET.delay, send: function (m) { try { c.send(m); } catch (e) {} },
+        onDesync: function () { c.send({ t: "desync" }); } });
+      c.send({ t: "go" });
+      netStarted();
+    }
+  }
+  function netResync() {
+    if (NET.role !== "host" || !LITE || !LITE.net || LITE.net.syncing) return;
+    var snap = LITE.netSnapshot();
+    NET.conn.send({ t: "sync", f: snap.f, state: snap.state.buffer });
+  }
+  function netStarted() {
+    NET.started = true;
+    $("loading").hidden = true;
+    $("net").hidden = true;
+    state.view = "game";
+    $("net-badge").hidden = false;
+    toast("Online com " + (NET.friend || "a outra TV") + " — você é o Jogador " + (NET.role === "host" ? 1 : 2), 3500);
+    clearInterval(NET.timer);
+    NET.timer = setInterval(function () {
+      if (!NET || !NET.conn) return;
+      try { NET.conn.send({ t: "ping", s: performance.now() }); } catch (e) {}
+      var n = LITE && LITE.net;
+      var waiting = n && n.stalled && performance.now() - n.stalledAt > 700;
+      $("net-wait").hidden = !waiting;
+      $("net-badge").textContent = "ONLINE · J" + (NET.role === "host" ? 1 : 2) + " · " + (NET.rtt ? NET.rtt + " ms" : "…");
+    }, 1000);
+  }
+  function netLost() {
+    if (!NET) return;
+    var was = NET.started, who = NET.friend || "A outra TV";
+    clearInterval(NET.timer);
+    NET.conn = null;
+    if (was && state.view !== "launcher") {
+      toast(who + " saiu da partida", 4000);
+      setTimeout(function () { exitGame("Partida encerrada…"); }, 1500);
+    } else netStatus("A outra TV desconectou", "err");
+  }
 
   // ====================================================================
   // Início

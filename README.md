@@ -9,6 +9,8 @@ Emulador de Super Nintendo em WebAssembly com dois motores: **Snes9x 2005** (bas
 3. No celular, toque em **Escolher jogos** e selecione os arquivos `.sfc`, `.smc` ou `.zip`.
 4. Os jogos ficam salvos na TV; da próxima vez é só abrir o link e escolher o jogo.
 
+**Jogar online:** cartucho "Jogar online" — uma TV cria a partida e recebe um código, a outra entra com o código (mesmo arquivo de jogo nas duas). Só os botões trafegam (lockstep com conferência de memória).
+
 **Celular como controle:** na TV escolha "Celular como controle" e leia o QR Code; o celular vira um controle de SNES (`controle.html`).
 
 O envio usa conexão direta (WebRTC), com o servidor público gratuito do PeerJS só para combinar a conexão; os arquivos não ficam guardados em nenhum servidor.

@@ -82,6 +82,8 @@
   <div id="stage"><div id="player"></div></div>
   <canvas id="crt" class="crt" hidden></canvas>
   <div id="fps" class="fps" hidden></div>
+  <div id="net-badge" class="net-badge" hidden>ONLINE</div>
+  <div id="net-wait" class="net-wait" hidden>Aguardando a outra TV…</div>
 </section>
 
 <!-- ============ CARREGANDO ============ -->
@@ -237,6 +239,35 @@
       <kbd>OK</kbd> pular este botão · <kbd class="key-dot c-a"></kbd> voltar ao padrão · <kbd>VOLTAR</kbd> cancelar</p>
   </div>
 </div>
+
+<!-- ============ JOGAR ONLINE ============ -->
+<div id="net" class="overlay" hidden>
+  <div class="panel net-panel">
+    <h2>Jogar online</h2>
+    <div id="net-home">
+      <p class="muted">Jogue com um amigo em outra TV. As duas TVs precisam ter o mesmo jogo e estar com este site aberto.</p>
+      <div class="net-btns">
+        <div class="net-btn"><b>Criar partida</b><span>Você escolhe o jogo e recebe um código</span></div>
+        <div class="net-btn"><b>Entrar com código</b><span>Digite o código da outra TV</span></div>
+      </div>
+      <p class="muted small center"><kbd>◀ ▶</kbd> escolher · <kbd>OK</kbd> confirmar · <kbd>VOLTAR</kbd> fechar</p>
+    </div>
+    <div id="net-host" hidden>
+      <p class="muted">Jogo da partida: <b id="net-game"></b></p>
+      <p>Na outra TV, abra <b>Jogar online → Entrar com código</b> e digite:</p>
+      <div class="net-code-big" id="net-code-big">······</div>
+      <p id="net-st-host" class="phone-status center">Preparando…</p>
+      <p class="muted small center">Você será o <b>Jogador 1</b> · <kbd>VOLTAR</kbd> cancelar</p>
+    </div>
+    <div id="net-join" hidden>
+      <p>Digite o código que aparece na outra TV:</p>
+      <input id="net-code" class="name-input net-input" type="text" maxlength="6" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" placeholder="CÓDIGO">
+      <p id="net-st-join" class="phone-status center"></p>
+      <p class="muted small center">Você será o <b>Jogador 2</b> · <kbd>OK</kbd> entrar · <kbd>VOLTAR</kbd> cancelar</p>
+    </div>
+  </div>
+</div>
+<div id="net-banner" class="net-banner" hidden>Jogar online: escolha o jogo da partida e aperte <b>OK</b> · <b>VOLTAR</b> cancela</div>
 
 <!-- ============ NOME ============ -->
 <div id="name-box" class="overlay name-overlay" hidden>

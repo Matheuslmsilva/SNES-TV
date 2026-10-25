@@ -345,3 +345,21 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 .pair-st { font-size: 1.1rem; font-weight: 700; color: #9a94a8; }
 .pair-slot.on { border-color: #8fe3a5; }
 .pair-slot.on .pair-st { color: #8fe3a5; }
+
+/* ---------- Jogar online ---------- */
+.panel.net-panel { width: 56rem; text-align: center; }
+.net-btns { display: -webkit-flex; display: flex; -webkit-justify-content: center; justify-content: center; margin: 1.6rem 0 1.2rem; }
+.net-btn { width: 22rem; margin: 0 0.8rem; padding: 1.4rem 1.2rem; border-radius: 1rem; background: rgba(255,255,255,0.05);
+  border: 0.15rem solid transparent; display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; }
+.net-btn b { font-size: 1.4rem; margin-bottom: 0.4rem; }
+.net-btn span { color: #9a94a8; font-size: 0.95rem; }
+.net-btn.focused { background: #6c5fc7; border-color: #b9adff; }
+.net-btn.focused span { color: #e5e0ff; }
+.net-code-big { font: 800 4.4rem/1.2 "Courier New", monospace; letter-spacing: 0.35em; color: #b9adff; margin: 1rem 0; }
+.net-input { letter-spacing: 0.4em; text-transform: uppercase; font-size: 2.6rem; }
+.net-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 45; text-align: center; padding: 0.8rem; font-size: 1.15rem;
+  background: #6c5fc7; color: #fff; }
+.net-badge { position: absolute; top: 1.2rem; left: 1.4rem; z-index: 5; font: 700 1rem/1 "Courier New", monospace;
+  padding: 0.45rem 0.8rem; border-radius: 0.4rem; background: rgba(0,0,0,0.6); color: #8fe3a5; }
+.net-wait { position: absolute; left: 50%; bottom: 3rem; z-index: 6; -webkit-transform: translateX(-50%); transform: translateX(-50%);
+  padding: 0.8rem 1.6rem; border-radius: 0.8rem; background: rgba(20,18,25,0.9); color: #ffd36b; font-size: 1.2rem; font-weight: 700; }

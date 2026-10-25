@@ -161,6 +161,8 @@
     var hz = 1000 / this.avg;
     var vsync = Math.abs(hz - this.fps) < 1.5;    // tela a ~60 Hz: 1 quadro por atualização
 
+    if (this.net) { this.netLoop(dt, vsync, hz, occ); return; }
+
     var n;
     if (this.turbo) {
       n = 3;
@@ -189,6 +191,12 @@
 
   // ---------------- controles ----------------
   LiteSNES.prototype.press = function (port, btn, down) {
+    if (this.net) {             // jogo em rede: só o jogador desta TV, aplicado no quadro combinado
+      if (port !== 0 || btn < 0 || btn > 11) return;
+      var lm = this.net.localPad;
+      this.net.localPad = down ? (lm | (1 << btn)) : (lm & ~(1 << btn));
+      return;
+    }
     if (btn === 27) { this.turbo = !!down; return; }
     if (btn < 0 || btn > 11 || port > 4) return;
     var m = this.pads[port];
@@ -207,6 +215,97 @@
   LiteSNES.prototype.pause = function () { this.paused = true; };
   LiteSNES.prototype.play = function () { this.paused = false; this.last = performance.now(); this.acc = 0; };
   LiteSNES.prototype.reset = function () { if (this.M) this.M._s_reset(); };
+
+  // ---------------- jogo em rede (lockstep) ----------------
+  // As duas TVs rodam o mesmo jogo e trocam só os botões. O botão apertado no quadro F
+  // vale no quadro F + atraso, nas duas TVs. Se faltar o botão do outro, a TV espera.
+  LiteSNES.prototype.startNet = function (o) {
+    var n = {
+      role: o.role, delay: o.delay || 4, send: o.send, frame: 0,
+      myPort: o.role === "host" ? 0 : 1, otherPort: o.role === "host" ? 1 : 0,
+      local: {}, remote: {}, localPad: 0, stalledAt: 0, stalled: false,
+      myChk: {}, otherChk: {}, syncing: false, onDesync: o.onDesync || null
+    };
+    for (var f = 0; f < n.delay; f++) { n.local[f] = 0; n.remote[f] = 0; }
+    this.net = n;
+    this.turbo = false;
+    this.pads = [0, 0, 0, 0, 0];
+    for (var p = 0; p < 5; p++) this.M._s_set_pad(p, 0);
+  };
+
+  LiteSNES.prototype.netLoop = function (dt, vsync, hz, occ) {
+    var n = this.net, M = this.M;
+    if (n.syncing) return;
+    var runs = 1;
+    if (vsync) { runs = Math.round(dt / (1000 / hz)); if (runs < 1) runs = 1; if (runs > 2) runs = 2; }
+    else { this.acc += dt; runs = Math.floor(this.acc / (1000 / this.fps)); if (runs > 2) { runs = 2; this.acc = 0; } else this.acc -= runs * (1000 / this.fps); }
+    var drew = false;
+    for (var i = 0; i < runs; i++) {
+      var f = n.frame, tf = f + n.delay;
+      if (n.local[tf] === undefined) {          // agenda o meu botão para daqui a "atraso" quadros
+        n.local[tf] = n.localPad;
+        n.send({ t: "in", f: tf, m: n.localPad });
+      }
+      if (n.remote[f] === undefined || n.local[f] === undefined) {
+        if (!n.stalled) { n.stalled = true; n.stalledAt = performance.now(); }
+        break;
+      }
+      n.stalled = false;
+      M._s_set_pad(n.myPort, n.local[f]);
+      M._s_set_pad(n.otherPort, n.remote[f]);
+      M._s_run(occ, 0);                         // em rede nunca pula desenho (mantém as TVs iguais)
+      this.frames++;
+      if (M._s_video_new()) drew = true;
+      this.pushAudio();
+      delete n.local[f - 120]; delete n.remote[f - 120];
+      n.frame = f + 1;
+      if (f % 120 === 60) this.netCheck(f);
+    }
+    if (drew) this.draw();
+  };
+
+  LiteSNES.prototype.ramHash = function () {
+    var m = this.mem(); if (!m) return 0;
+    var r = this.rView, h = 2166136261;
+    for (var i = 0; i < r.length; i += 2) { h ^= r[i]; h = (h * 16777619) >>> 0; }
+    return h;
+  };
+  LiteSNES.prototype.netCheck = function (f) {
+    var n = this.net, h = this.ramHash();
+    n.myChk[f] = h;
+    n.send({ t: "chk", f: f, h: h });
+    if (n.otherChk[f] !== undefined) this.netCompare(f);
+    delete n.myChk[f - 600]; delete n.otherChk[f - 600];
+  };
+  LiteSNES.prototype.netCompare = function (f) {
+    var n = this.net;
+    if (n.myChk[f] === undefined || n.otherChk[f] === undefined) return;
+    if (n.myChk[f] !== n.otherChk[f] && n.onDesync) n.onDesync(f);
+  };
+
+  // estado completo para ressincronizar (só o anfitrião manda)
+  LiteSNES.prototype.netSnapshot = function () {
+    var n = this.net;
+    n.syncing = true;
+    return { f: n.frame, state: this.getState() };
+  };
+  LiteSNES.prototype.netApply = function (f, state) {
+    var n = this.net;
+    this.loadState(new Uint8Array(state));
+    if (f > n.frame) {                          // pulou para frente: completa os meus botões que faltam
+      for (var x = n.frame + n.delay; x < f + n.delay; x++) {
+        if (n.local[x] === undefined) { n.local[x] = n.localPad; n.send({ t: "in", f: x, m: n.localPad }); }
+      }
+    }
+    n.frame = f;
+    n.myChk = {}; n.otherChk = {};
+  };
+
+  LiteSNES.prototype.netRecv = function (d) {
+    var n = this.net; if (!n || !d) return;
+    if (d.t === "in") n.remote[d.f] = d.m;
+    else if (d.t === "chk") { n.otherChk[d.f] = d.h; this.netCompare(d.f); }
+  };
 
   // ---------------- saves ----------------
   LiteSNES.prototype.sramView = function () {
