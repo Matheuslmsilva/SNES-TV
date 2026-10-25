@@ -620,13 +620,76 @@
       pl.style.left = pl.style.top = pl.style.width = pl.style.height = "";
     }
 
-    // Filtro de TV de tubo: uma camada por cima da imagem (não pesa no emulador)
+    // Filtro de TV de tubo: uma imagem pronta, desenhada uma vez só, colada por cima do jogo
     var el = $("crt");
     el.hidden = !crt;
     $("game").classList.toggle("crt-on", crt);
-    el.style.left = gx + "px"; el.style.top = gy + "px";
-    el.style.width = Math.round(gw) + "px"; el.style.height = Math.round(gh) + "px";
-    el.style.setProperty("--line", (gh / 224).toFixed(3) + "px");   // 224 linhas do SNES
+    if (crt) buildCrt(el, vw, vh, gx, gy, Math.round(gw), Math.round(gh));
+  }
+
+  function roundRectPath(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+
+  var crtKey = "";
+  function buildCrt(cv, vw, vh, gx, gy, gw, gh) {
+    var key = [vw, vh, gx, gy, gw, gh].join("x");
+    if (key === crtKey) return;          // já está pronta para este tamanho
+    crtKey = key;
+    cv.width = vw; cv.height = vh;
+    var c = cv.getContext("2d");
+    var r = Math.round(gh * 0.045);      // cantos arredondados do tubo
+    var b = Math.round(vh * 0.019);      // espessura da moldura
+
+    // fundo preto + moldura de plástico
+    c.fillStyle = "#000"; c.fillRect(0, 0, vw, vh);
+    roundRectPath(c, gx - b - 4, gy - b - 4, gw + 2 * b + 8, gh + 2 * b + 8, r + b + 4); c.fillStyle = "#121116"; c.fill();
+    roundRectPath(c, gx - b, gy - b, gw + 2 * b, gh + 2 * b, r + b); c.fillStyle = "#2b2831"; c.fill();
+    roundRectPath(c, gx - b + 3, gy - b + 3, gw + 2 * b - 6, gh + 2 * b - 6, r + b - 3); c.fillStyle = "#0d0c10"; c.fill();
+
+    // abre o buraco da tela
+    c.save();
+    roundRectPath(c, gx, gy, gw, gh, r);
+    c.globalCompositeOperation = "destination-out";
+    c.fill();
+    c.restore();
+
+    // tudo daqui para baixo fica só dentro da tela
+    c.save();
+    roundRectPath(c, gx, gy, gw, gh, r);
+    c.clip();
+
+    // linhas de varredura: uma faixa escura por linha do SNES (224 linhas)
+    var lh = gh / 224;
+    for (var i = 0; i < 224; i++) {
+      var y = gy + i * lh;
+      c.fillStyle = "rgba(0,0,0,0.30)"; c.fillRect(gx, y + lh * 0.5, gw, lh * 0.38);
+      c.fillStyle = "rgba(0,0,0,0.10)"; c.fillRect(gx, y + lh * 0.88, gw, lh * 0.12);
+    }
+    // grade de fósforo RGB
+    var cols = ["rgba(255,60,60,0.05)", "rgba(60,255,90,0.05)", "rgba(70,100,255,0.05)"];
+    for (var x = gx; x < gx + gw; x++) { c.fillStyle = cols[(x - gx) % 3]; c.fillRect(x, gy, 1, gh); }
+    // vinheta (bordas do tubo mais escuras)
+    var vg = c.createRadialGradient(gx + gw / 2, gy + gh / 2, gh * 0.45, gx + gw / 2, gy + gh / 2, gh * 0.85);
+    vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,0.5)");
+    c.fillStyle = vg; c.fillRect(gx, gy, gw, gh);
+    // sombra interna da borda do vidro
+    for (var k = 0; k < 14; k++) {
+      roundRectPath(c, gx + k, gy + k, gw - 2 * k, gh - 2 * k, Math.max(2, r - k));
+      c.strokeStyle = "rgba(0,0,0," + (0.42 * (1 - k / 14)).toFixed(3) + ")";
+      c.lineWidth = 2; c.stroke();
+    }
+    // reflexo suave no vidro
+    var gl = c.createRadialGradient(gx + gw * 0.28, gy + gh * 0.18, 0, gx + gw * 0.28, gy + gh * 0.18, gh * 0.45);
+    gl.addColorStop(0, "rgba(255,255,255,0.06)"); gl.addColorStop(1, "rgba(255,255,255,0)");
+    c.fillStyle = gl; c.fillRect(gx, gy, gw, gh);
+    c.restore();
   }
   window.addEventListener("resize", fitPlayer);
 
