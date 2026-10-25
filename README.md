@@ -1,6 +1,6 @@
 # SNES TV
 
-Emulador de Super Nintendo (snes9x em WebAssembly, via [EmulatorJS](https://github.com/EmulatorJS/EmulatorJS)) feito para abrir no navegador da TV Samsung e jogar com o controle remoto ou um joystick USB/Bluetooth.
+Emulador de Super Nintendo em WebAssembly com dois motores: **Snes9x 2005** (base do [CATSFC](https://github.com/ShadauxCat/CATSFC), leve, padrão) e **snes9x** atual via [EmulatorJS](https://github.com/EmulatorJS/EmulatorJS) feito para abrir no navegador da TV Samsung e jogar com o controle remoto ou um joystick USB/Bluetooth.
 
 **Abrir:** https://matheuslmsilva.github.io/SNES-TV/
 
@@ -13,4 +13,4 @@ O envio usa conexão direta (WebRTC), com o servidor público gratuito do PeerJS
 
 Nenhum jogo vem incluído. Use apenas cópias que você tem o direito de usar.
 
-Licenças: PeerJS (MIT), qrcode-generator (MIT), snes9x (licença não comercial), EmulatorJS (GPL-3.0, ver `emulator/LICENSE-EmulatorJS.txt`).
+Licenças: Snes9x 2005 (licença não comercial do snes9x, ver `lite/LICENSE-snes9x2005.txt`), fflate (MIT), PeerJS (MIT), qrcode-generator (MIT), snes9x (licença não comercial), EmulatorJS (GPL-3.0, ver `emulator/LICENSE-EmulatorJS.txt`).

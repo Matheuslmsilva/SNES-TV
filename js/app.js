@@ -491,6 +491,7 @@
     store("snestv.last", gameKey(g));
 
     getRomBytes(g).then(function (data) {
+      if (engineName() === "lite" && !/\.7z$/i.test(g.name)) return startLite(g, data);
       var file = data instanceof File ? data : new File([data], g.name, { type: "application/octet-stream" });
       $("loading-text").textContent = "Iniciando " + g.title + "…";
       $("launcher").hidden = true;
@@ -547,6 +548,38 @@
     });
   }
 
+  function startLite(g, data) {
+    $("loading-text").textContent = "Iniciando " + g.title + "…";
+    $("launcher").hidden = true;
+    $("game").hidden = false;
+    $("game").classList.add("lite");
+    $("game").classList.remove("light", "max");
+    var key = "sram2005:" + gameKey(g);
+    var bytes = (typeof Blob !== "undefined" && data instanceof Blob) ? readAsBuffer(data) : Promise.resolve(data);
+    var libs = window.LiteSNES ? Promise.resolve() :
+      loadScript("lib/fflate.js").then(function () { return loadScript("lite/snes2005.js"); })
+        .then(function () { return loadScript("lite/lite.js"); });
+    return libs.then(function () { return bytes; }).then(function (buf) {
+      LITE = new LiteSNES({
+        container: $("player"),
+        loadSram: function () { return dbGet(key).then(function (d) { return d ? new Uint8Array(d) : null; }, function () { return null; }); },
+        saveSram: function (u8) { return dbPut(key, u8.buffer); }
+      });
+      window.SNESTV_LITE = LITE;   // para diagnóstico
+      fitPlayer();
+      return LITE.start(buf);
+    }).then(function () {
+      $("loading").hidden = true;
+      state.view = "game";
+      fitPlayer();
+      startFps();
+    }).catch(function (e) {
+      console.error(e);
+      fail("Este jogo não abriu no emulador TV antiga. Mudei para o TV nova — abra o jogo de novo.");
+      try { localStorage.setItem("snestv.engine", "ejs"); } catch (err) {}
+    });
+  }
+
   function fail(msg) {
     $("loading").hidden = true;
     toast(msg, 6000);
@@ -566,7 +599,12 @@
     var gx = Math.round((vw - gw) / 2), gy = Math.round((vh - gh) / 2);
 
     var pl = $("stage");
-    if ($("game").classList.contains("light")) {
+    if ($("game").classList.contains("lite")) {
+      pl.style.transform = "";
+      pl.style.position = "absolute";
+      pl.style.left = gx + "px"; pl.style.top = gy + "px";
+      pl.style.width = Math.round(gw) + "px"; pl.style.height = Math.round(gh) + "px";
+    } else if ($("game").classList.contains("light")) {
       pl.style.width = pl.style.height = "";
       var W = pl.offsetWidth || 640, H = pl.offsetHeight || 480, k = gh / H;
       pl.style.transform = "scale(" + k + ")";
@@ -598,14 +636,20 @@
     var el = $("fps");
     el.hidden = !showFps();
     if (el.hidden) return;
-    var last = null, lastT = 0;
+    var last = null, lastT = 0, lastD = 0;
     fpsTimer = setInterval(function () {
-      var g = gm(); if (!g) return;
-      var n = 0; try { n = g.getFrameNum(); } catch (e) { return; }
+      if (!E.ready()) return;
+      var n = 0; try { n = E.frames(); } catch (e) { return; }
       var t = performance.now();
       if (last !== null && state.view === "game") {
         var fps = (n - last) * 1000 / (t - lastT);
-        el.textContent = Math.round(fps) + " FPS" + (fps < 55 ? " · lento" : "");
+        var extra = "";
+        if (LITE) {
+          var d = LITE.drawn || 0, img = (d - lastD) * 1000 / (t - lastT);
+          lastD = d;
+          if (img < fps - 2) extra = " · imagem " + Math.round(img);
+        }
+        el.textContent = Math.round(fps) + " FPS" + (fps < 55 ? " · lento" : "") + extra;
         el.className = "fps " + (fps >= 57 ? "ok" : fps >= 45 ? "mid" : "bad");
       }
       last = n; lastT = t;
@@ -615,15 +659,41 @@
   function emu() { return window.EJS_emulator; }
   function gm() { var e = emu(); return e && e.gameManager; }
 
+  // ---------------- Dois motores: "TV antiga" (Snes9x 2005) e "TV nova" (snes9x atual) ----------------
+  var LITE = null;
+  var ENGINE_NAMES = { lite: "TV antiga (leve)", ejs: "TV nova (completo)" };
+  function engineName() {
+    var v = null;
+    try { v = localStorage.getItem("snestv.engine"); } catch (e) {}
+    return v === "ejs" ? "ejs" : "lite";
+  }
+  var E = {
+    press: function (port, btn, down) {
+      if (LITE) return LITE.press(port, btn, down);
+      var g = gm(); if (!g) return;
+      try { g.simulateInput(port, btn, down ? 1 : 0); } catch (e) {}
+    },
+    pause: function () { if (LITE) LITE.pause(); else try { emu().pause(); } catch (e) {} },
+    play: function () { if (LITE) LITE.play(); else try { emu().play(); } catch (e) {} },
+    getState: function () { return LITE ? LITE.getState() : gm().getState(); },
+    loadState: function (d) { if (LITE) LITE.loadState(new Uint8Array(d)); else gm().loadState(d); },
+    restart: function () { if (LITE) LITE.reset(); else try { gm().restart(); } catch (e) {} },
+    turbo: function (on) { if (LITE) LITE.setTurbo(on); else try { gm().toggleFastForward(on ? 1 : 0); } catch (e) {} },
+    saveSram: function () {
+      if (LITE) return LITE.saveSram();
+      try { gm().saveSaveFiles(); } catch (e) {}
+      return new Promise(function (r) { setTimeout(r, 1200); });   // dá tempo do IndexedDB gravar
+    },
+    frames: function () { if (LITE) return LITE.frames; var g = gm(); return g ? g.getFrameNum() : 0; },
+    ready: function () { return !!(LITE || gm()); }
+  };
+
   function focusEmu() {
     var e = emu();
     try { if (e && e.elements && e.elements.parent) e.elements.parent.focus(); } catch (err) {}
   }
 
-  function press(btn, down) {
-    var g = gm(); if (!g) return;
-    try { g.simulateInput(0, btn, down ? 1 : 0); } catch (e) {}
-  }
+  function press(btn, down) { E.press(0, btn, down); }
 
   function releaseAll() {
     Object.keys(state.held).forEach(function (k) { press(state.held[k], false); });
@@ -634,12 +704,13 @@
   function openMenu() {
     releaseAll();
     releasePads();
-    try { emu().pause(); } catch (e) {}
+    E.pause();
     state.view = "menu";
     state.menuFocus = 0;
     $("menu-title").textContent = state.current ? state.current.title : "Pausado";
     $("turbo-state").textContent = state.turbo ? "ligada" : "desligada";
-    $("perf-state").textContent = PERF_NAMES[perfMode()];
+    $("perf-state").textContent = LITE ? "automático" : PERF_NAMES[perfMode()];
+    $("engine-state").textContent = ENGINE_NAMES[LITE ? "lite" : "ejs"];
     $("fps-state").textContent = showFps() ? "sim" : "não";
     $("crt-state").textContent = crtOn() ? "ligado" : "desligado";
     $("menu").hidden = false;
@@ -649,7 +720,7 @@
   function closeMenu() {
     $("menu").hidden = true;
     state.view = "game";
-    try { emu().play(); } catch (e) {}
+    E.play();
     focusEmu();
   }
 
@@ -660,11 +731,11 @@
 
   function menuAction() {
     var act = $("menu-list").children[state.menuFocus].getAttribute("data-act");
-    var g = gm(), key = "state:" + gameKey(state.current);
+    var key = (LITE ? "state2005:" : "state:") + gameKey(state.current);
     if (act === "resume") return closeMenu();
     if (act === "save") {
       try {
-        var data = g.getState();
+        var data = E.getState();
         dbPut(key, data).then(function () { toast("Estado salvo"); closeMenu(); },
           function () { toast("Não foi possível salvar o estado"); });
       } catch (e) { toast("Não foi possível salvar o estado"); }
@@ -673,7 +744,7 @@
     if (act === "load") {
       dbGet(key).then(function (data) {
         if (!data) { toast("Nenhum estado salvo para este jogo"); return; }
-        g.loadState(data);
+        E.loadState(data);
         toast("Estado carregado");
         closeMenu();
       }, function () { toast("Não foi possível carregar o estado"); });
@@ -681,12 +752,20 @@
     }
     if (act === "turbo") {
       state.turbo = !state.turbo;
-      try { g.toggleFastForward(state.turbo ? 1 : 0); } catch (e) {}
+      E.turbo(state.turbo);
       $("turbo-state").textContent = state.turbo ? "ligada" : "desligada";
       return;
     }
-    if (act === "restart") { try { g.restart(); } catch (e) {} closeMenu(); return; }
+    if (act === "restart") { E.restart(); closeMenu(); return; }
+    if (act === "engine") {
+      var ne = engineName() === "lite" ? "ejs" : "lite";
+      try { localStorage.setItem("snestv.engine", ne); } catch (e) {}
+      try { localStorage.setItem("snestv.autostart", gameKey(state.current)); } catch (e) {}
+      $("engine-state").textContent = ENGINE_NAMES[ne];
+      return exitGame("Trocando para o emulador " + ENGINE_NAMES[ne] + "…");
+    }
     if (act === "perf") {
+      if (LITE) { toast("Este ajuste é só para o emulador TV nova. O TV antiga já roda no modo mais leve.", 3500); return; }
       var next = { max: "leve", leve: "normal", normal: "max" }[perfMode()];
       try { localStorage.setItem("snestv.perf", next); } catch (e) {}
       try { localStorage.setItem("snestv.autostart", gameKey(state.current)); } catch (e) {}
@@ -712,9 +791,10 @@
   function exitGame(msg) {
     $("menu").hidden = true;
     showLoading(state.current, typeof msg === "string" ? msg : "Salvando…");
-    try { gm().saveSaveFiles(); } catch (e) {}
-    // dá tempo para o IndexedDB gravar o save da bateria
-    setTimeout(function () { location.reload(); }, 1500);
+    Promise.resolve(E.saveSram()).catch(function () {}).then(function () {
+      if (LITE) LITE.stop();
+      setTimeout(function () { location.reload(); }, 300);
+    });
   }
 
   function openHelp(from) {
@@ -888,22 +968,21 @@
   // botões enviados ao emulador, por jogador
   var padSent = {};
   function releasePads() {
-    var g = gm();
     Object.keys(padSent).forEach(function (k) {
       var parts = k.split(":");
-      try { if (g) g.simulateInput(+parts[0], +parts[1], 0); } catch (e) {}
+      E.press(+parts[0], +parts[1], false);
     });
     padSent = {};
-    if (state.padTurbo) { try { g.toggleFastForward(state.turbo ? 1 : 0); } catch (e) {} state.padTurbo = false; }
+    if (state.padTurbo) { E.turbo(state.turbo); state.padTurbo = false; }
   }
 
   function feedGame(states) {
-    var g = gm(); if (!g) return;
+    if (!E.ready()) return;
     states.forEach(function (st, player) {
       SNES_BTNS.forEach(function (b) {
         var k = player + ":" + b, on = !!st[b];
         if (on !== !!padSent[k]) {
-          try { g.simulateInput(player, b, on ? 1 : 0); } catch (e) {}
+          E.press(player, b, on);
           if (on) padSent[k] = true; else delete padSent[k];
         }
       });
@@ -936,7 +1015,7 @@
             feedGame(states);
             if (!!any.turbo !== !!state.padTurbo) {
               state.padTurbo = !!any.turbo;
-              try { gm().toggleFastForward(state.padTurbo || state.turbo ? 1 : 0); } catch (e) {}
+              E.turbo(state.padTurbo || state.turbo);
             }
           }
         } else if (state.view === "menu") {
