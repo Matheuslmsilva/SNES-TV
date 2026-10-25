@@ -162,6 +162,16 @@ class EJS_GameManager {
                 cfg += option.name + " = " + value + "\n"
             })
         }
+        // SNES TV: ajustes extras de desempenho (substituem chaves repetidas)
+        if (typeof window.SNESTV_RA_CFG === "string" && window.SNESTV_RA_CFG) {
+            window.SNESTV_RA_CFG.split("\n").forEach(line => {
+                const k = line.split("=")[0].trim();
+                if (!k) return;
+                cfg = cfg.split("\n").filter(l => l.split("=")[0].trim() !== k).join("\n");
+                if (!cfg.endsWith("\n")) cfg += "\n";
+                cfg += line + "\n";
+            });
+        }
         return cfg;
     }
     initShaders() {

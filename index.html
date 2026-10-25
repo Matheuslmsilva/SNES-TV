@@ -61,7 +61,8 @@
 
 <!-- ============ JOGO ============ -->
 <section id="game" hidden>
-  <div id="player"></div>
+  <div id="stage"><div id="player"></div></div>
+  <div id="fps" class="fps" hidden></div>
 </section>
 
 <!-- ============ CARREGANDO ============ -->
@@ -79,6 +80,8 @@
       <li data-act="save">Salvar estado</li>
       <li data-act="load">Carregar estado</li>
       <li data-act="turbo">Velocidade turbo: <b id="turbo-state">desligada</b></li>
+      <li data-act="perf">Desempenho: <b id="perf-state">velocidade máxima</b></li>
+      <li data-act="fps">Mostrar FPS: <b id="fps-state">não</b></li>
       <li data-act="restart">Reiniciar o jogo</li>
       <li data-act="controls">Ver controles</li>
       <li data-act="exit">Sair para a lista de jogos</li>

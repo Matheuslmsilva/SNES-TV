@@ -91,6 +91,18 @@
     return Math.round(bytes / 1024) + " KB";
   }
 
+  var TV_LIKE = IS_TIZEN || /SMART-TV|Tizen|Web0S|NetCast|HbbTV/i.test(navigator.userAgent);
+  // máximo = imagem 320x240 · leve = 640x480 · normal = tela inteira
+  var PERF_NAMES = { max: "velocidade máxima", leve: "equilibrado", normal: "qualidade máxima" };
+  function perfMode() {
+    var v = null;
+    try { v = localStorage.getItem("snestv.perf"); } catch (e) {}
+    if (v && PERF_NAMES[v]) return v;
+    return TV_LIKE ? "max" : "normal";   // na TV começa no mais rápido
+  }
+  function perfLight() { return perfMode() !== "normal"; }
+  function showFps() { try { return localStorage.getItem("snestv.fps") === "1"; } catch (e) { return false; } }
+
   function gameKey(g) { return g.name + "|" + (g.size || 0); }
 
   function store(key, val) {
@@ -311,6 +323,12 @@
       if (last) all.forEach(function (g) { g.last = gameKey(g) === last; });
 
       state.games = all;
+      var auto = null;
+      try { auto = localStorage.getItem("snestv.autostart"); localStorage.removeItem("snestv.autostart"); } catch (e) {}
+      if (auto) {
+        var ag = all.filter(function (g) { return gameKey(g) === auto; })[0];
+        if (ag) setTimeout(function () { startGame(ag); }, 50);
+      }
       var label = [];
       if (IS_TIZEN) label.push(usb.drives ? (usb.drives === 1 ? "Pen drive conectado" : usb.drives + " pen drives") : "Nenhum pen drive");
       if (pcGames.length) label.push("Pasta do PC");
@@ -488,7 +506,18 @@
       window.EJS_color = "#6c5fc7";
       window.EJS_backgroundColor = "#000000";
       window.EJS_defaultControls = controlsConfig();
+      var light = perfLight();
       window.EJS_defaultOptions = { "save-save-interval": "30" };
+      window.SNESTV_RA_CFG = "";
+      if (light) {
+        // som mais barato de processar e mais folga no áudio
+        window.EJS_defaultOptions["snes9x_audio_interpolation"] = "none";
+        window.EJS_defaultOptions["shader"] = "disabled";
+        window.SNESTV_RA_CFG = 'audio_resampler = "nearest"\naudio_resampler_quality = "1"\naudio_latency = 128\nvideo_smooth = false';
+      }
+      $("game").classList.toggle("light", light);
+      $("game").classList.toggle("max", perfMode() === "max");
+      fitPlayer();
       window.EJS_Buttons = {
         playPause: false, restart: false, mute: false, settings: false, fullscreen: false,
         saveState: false, loadState: false, screenRecord: false, gamepad: false, cheat: false,
@@ -499,6 +528,8 @@
         $("loading").hidden = true;
         state.view = "game";
         focusEmu();
+        fitPlayer();
+        startFps();
       };
 
       var s = document.createElement("script");
@@ -521,6 +552,38 @@
     toast(msg, 6000);
     // volta para a lista de forma limpa
     setTimeout(function () { location.reload(); }, state.view === "game" ? 3000 : 3500);
+  }
+
+  // Modo leve: o emulador desenha numa tela pequena (640x480) e a TV amplia.
+  // Isso tira muito trabalho da placa de vídeo da TV.
+  function fitPlayer() {
+    var pl = $("stage");
+    if (!$("game").classList.contains("light")) { pl.style.transform = ""; pl.style.left = pl.style.top = ""; return; }
+    var W = pl.offsetWidth || 640, H = pl.offsetHeight || 480, k = Math.min(window.innerWidth / W, window.innerHeight / H);
+    pl.style.transform = "scale(" + k + ")";
+    pl.style.left = Math.round((window.innerWidth - W * k) / 2) + "px";
+    pl.style.top = Math.round((window.innerHeight - H * k) / 2) + "px";
+  }
+  window.addEventListener("resize", fitPlayer);
+
+  var fpsTimer = null;
+  function startFps() {
+    clearInterval(fpsTimer);
+    var el = $("fps");
+    el.hidden = !showFps();
+    if (el.hidden) return;
+    var last = null, lastT = 0;
+    fpsTimer = setInterval(function () {
+      var g = gm(); if (!g) return;
+      var n = 0; try { n = g.getFrameNum(); } catch (e) { return; }
+      var t = performance.now();
+      if (last !== null && state.view === "game") {
+        var fps = (n - last) * 1000 / (t - lastT);
+        el.textContent = Math.round(fps) + " FPS" + (fps < 55 ? " · lento" : "");
+        el.className = "fps " + (fps >= 57 ? "ok" : fps >= 45 ? "mid" : "bad");
+      }
+      last = n; lastT = t;
+    }, 1000);
   }
 
   function emu() { return window.EJS_emulator; }
@@ -550,6 +613,8 @@
     state.menuFocus = 0;
     $("menu-title").textContent = state.current ? state.current.title : "Pausado";
     $("turbo-state").textContent = state.turbo ? "ligada" : "desligada";
+    $("perf-state").textContent = PERF_NAMES[perfMode()];
+    $("fps-state").textContent = showFps() ? "sim" : "não";
     $("menu").hidden = false;
     paintMenu();
   }
@@ -594,13 +659,26 @@
       return;
     }
     if (act === "restart") { try { g.restart(); } catch (e) {} closeMenu(); return; }
+    if (act === "perf") {
+      var next = { max: "leve", leve: "normal", normal: "max" }[perfMode()];
+      try { localStorage.setItem("snestv.perf", next); } catch (e) {}
+      try { localStorage.setItem("snestv.autostart", gameKey(state.current)); } catch (e) {}
+      $("perf-state").textContent = PERF_NAMES[next];
+      return exitGame("Reabrindo em " + PERF_NAMES[next] + "…");
+    }
+    if (act === "fps") {
+      try { localStorage.setItem("snestv.fps", showFps() ? "0" : "1"); } catch (e) {}
+      $("fps-state").textContent = showFps() ? "sim" : "não";
+      startFps();
+      return;
+    }
     if (act === "controls") { openHelp("menu"); return; }
     if (act === "exit") return exitGame();
   }
 
-  function exitGame() {
+  function exitGame(msg) {
     $("menu").hidden = true;
-    showLoading(state.current, "Salvando…");
+    showLoading(state.current, typeof msg === "string" ? msg : "Salvando…");
     try { gm().saveSaveFiles(); } catch (e) {}
     // dá tempo para o IndexedDB gravar o save da bateria
     setTimeout(function () { location.reload(); }, 1500);
@@ -700,10 +778,14 @@
     return n || "Joystick";
   }
   function padMapKey(p) { return "snestv.pad." + p.id; }
+  var mapCache = {};
   function customMap(p) {
-    var raw = store(padMapKey(p));
-    if (!raw) return null;
-    try { return JSON.parse(raw); } catch (e) { return null; }
+    var key = padMapKey(p);
+    if (key in mapCache) return mapCache[key];
+    var raw = store(key), m = null;
+    if (raw) { try { m = JSON.parse(raw); } catch (e) {} }
+    mapCache[key] = m;
+    return m;
   }
 
   // token: "b3" botão, "a1+" / "a1-" eixo, "a9=-0.43" eixo de valor fixo (direcional "hat")
@@ -935,6 +1017,7 @@
     if (wiz.step < WIZ.length) { paintWizard(); return; }
     if (!wiz.padId) { closeWizard(false); return; }
     try { localStorage.setItem("snestv.pad." + wiz.padId, JSON.stringify(wiz.map)); } catch (e) {}
+    mapCache = {};
     toast("🎮 " + wiz.padName + " configurado!", 2600);
     closeWizard(true);
   }
@@ -944,6 +1027,7 @@
   function wizardReset() {
     var pads = connectedPads();
     var p = wiz && wiz.pad !== null ? pads.filter(function (x) { return x.index === wiz.pad; })[0] : pads[0];
+    mapCache = {};
     if (p) { try { localStorage.removeItem(padMapKey(p)); } catch (e) {} toast("Botões de " + padName(p) + " voltaram ao padrão", 2600); }
     closeWizard(true);
   }
