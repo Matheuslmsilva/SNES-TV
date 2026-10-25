@@ -293,7 +293,7 @@
     if (scanning) return;
     scanning = true;
     $("source-label").textContent = "Procurando jogos…";
-    var jobs = [scanServer(), IS_TIZEN ? romsAll().then(function () { return []; }) : romsAll()];
+    var jobs = [scanServer(), romsAll()];
     if (IS_TIZEN) jobs.push(scanUsb());
     Promise.all(jobs).then(function (res) {
       var pcGames = res[0];
@@ -327,7 +327,10 @@
     var grid = $("grid");
     grid.innerHTML = "";
     var items = state.games.slice();
-    if (!IS_TIZEN) items.unshift({ action: "open", title: "Abrir jogos do pen drive…", meta: "Escolher arquivos .sfc / .smc / .zip" });
+    // navegador da TV não abre arquivos; no PC/celular o seletor funciona
+    var tvBrowser = /SMART-TV|Tizen|Web0S|NetCast|HbbTV/i.test(navigator.userAgent);
+    if (!IS_TIZEN && !tvBrowser) items.unshift({ action: "open", title: "Abrir arquivos…", meta: "Escolher .sfc / .smc / .zip" });
+    items.unshift({ action: "phone", title: "Adicionar pelo celular", meta: "Ler QR Code e enviar jogos" });
     $("empty").hidden = items.length > 0;
     grid.hidden = items.length === 0;
 
@@ -336,7 +339,7 @@
       var el = document.createElement("div");
       el.className = "tile" + (g.action ? " action" : "");
       el.setAttribute("role", "option");
-      var initial = g.action ? "+" : (g.title.match(/[A-Za-z0-9À-ú]/) || ["?"])[0].toUpperCase();
+      var initial = g.action === "phone" ? "QR" : g.action ? "+" : (g.title.match(/[A-Za-z0-9À-ú]/) || ["?"])[0].toUpperCase();
       var hue = g.action ? 250 : hashHue(g.title);
       var meta = g.action ? g.meta :
         [g.region, fmtSize(g.size), g.source === "usb" ? "USB" : g.source === "pc" ? "PC" : g.source === "local" ? "salvo" : ""].filter(Boolean).join(" · ");
@@ -395,6 +398,7 @@
     var g = state.items && state.items[state.focus];
     if (!g) return;
     if (g.action === "open") { $("file-input").click(); return; }
+    if (g.action === "phone") { openPhone(); return; }
     startGame(g);
   }
 
@@ -659,6 +663,8 @@
       else if (isBack(c)) closeMenu();
     } else if (state.view === "help") {
       if (c === K.ENTER || isBack(c)) closeHelp();
+    } else if (state.view === "phone") {
+      if (isBack(c) || c === K.ENTER) closePhone();
     } else if (state.view === "wizard") {
       if (isBack(c)) closeWizard(false);
       else if (c === K.ENTER) wizardSkip();
@@ -826,6 +832,8 @@
           if (back || hit("menu")) closeMenu();
         } else if (state.view === "help") {
           if (ok || back) closeHelp();
+        } else if (state.view === "phone") {
+          if (back || hit(BTN.B) || hit(BTN.A)) closePhone();
         }
         padPrev = any;
       }
@@ -1003,6 +1011,136 @@
     $("tv-cpu").textContent = i.line2;
     $("tv-extra").textContent = i.line3;
     updatePadBadge(connectedPads());
+  }
+
+  // ====================================================================
+  // Receber jogos pelo celular (QR Code + conexão direta WebRTC/PeerJS)
+  // ====================================================================
+  var SITE_URL = "https://matheuslmsilva.github.io/SNES-TV/";
+  var phone = null;
+
+  function loadScript(src) {
+    return new Promise(function (res, rej) {
+      var s = document.createElement("script");
+      s.src = src; s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  function sendUrl(code) {
+    var base = /^https?:$/.test(location.protocol) ? location.href.replace(/[#?].*$/, "").replace(/[^/]*$/, "") : SITE_URL;
+    return base + "enviar.html#" + code;
+  }
+
+  function newCode() {
+    var A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789", c = "";
+    for (var i = 0; i < 6; i++) c += A.charAt(Math.floor(Math.random() * A.length));
+    return c;
+  }
+
+  function phoneStatus(text, kind) {
+    var el = $("phone-status");
+    el.textContent = text;
+    el.className = "phone-status " + (kind || "");
+  }
+
+  function openPhone() {
+    state.view = "phone";
+    $("phone").hidden = false;
+    $("phone-qr").innerHTML = "";
+    $("phone-code").textContent = "······";
+    $("phone-url").textContent = "";
+    $("phone-list").innerHTML = "";
+    phone = { received: 0 };
+    if (!window.RTCPeerConnection && !window.webkitRTCPeerConnection) {
+      phoneStatus("O navegador desta TV não suporta receber arquivos do celular.", "err");
+      return;
+    }
+    phoneStatus("Preparando…");
+    var libs = window.Peer && window.qrcode ? Promise.resolve() :
+      Promise.all([loadScript("lib/peerjs.min.js"), loadScript("lib/qrcode.js")]);
+    libs.then(startPeer, function () { phoneStatus("Não consegui carregar os arquivos de conexão.", "err"); });
+  }
+
+  function startPeer() {
+    if (!phone) return;
+    var P = window.Peer || (window.peerjs && window.peerjs.Peer);
+    var code = newCode();
+    var peer = new P("snestv-tv-" + code);
+    phone.peer = peer;
+    peer.on("open", function () {
+      if (!phone || phone.peer !== peer) return;
+      var url = sendUrl(code);
+      var qr = qrcode(0, "M");
+      qr.addData(url);
+      qr.make();
+      $("phone-qr").innerHTML = qr.createSvgTag({ cellSize: 6, margin: 3, scalable: true });
+      $("phone-code").textContent = code;
+      $("phone-url").textContent = url.replace(/^https?:\/\//, "").replace(/#.*$/, "") + "  ·  código " + code;
+      phoneStatus("Aguardando o celular…");
+    });
+    peer.on("connection", function (conn) { handlePhoneConn(conn); });
+    peer.on("error", function (err) {
+      if (!phone || phone.peer !== peer) return;
+      if (err.type === "unavailable-id") { try { peer.destroy(); } catch (e) {} startPeer(); return; }
+      if (err.type === "browser-incompatible") phoneStatus("O navegador desta TV não suporta receber arquivos do celular.", "err");
+      else if (err.type === "network" || err.type === "server-error" || err.type === "socket-error")
+        phoneStatus("Sem conexão com a internet. Confira o Wi-Fi da TV.", "err");
+      else phoneStatus("Erro: " + (err.type || err), "err");
+    });
+    peer.on("disconnected", function () { try { if (phone && phone.peer === peer) peer.reconnect(); } catch (e) {} });
+  }
+
+  function handlePhoneConn(conn) {
+    var cur = null;
+    conn.on("open", function () { phoneStatus("Celular conectado ✓ — escolha os jogos no celular", "ok"); });
+    conn.on("data", function (d) {
+      if (d instanceof ArrayBuffer || (d && d.byteLength !== undefined && !d.t)) {
+        if (!cur) return;
+        var u = new Uint8Array(d.buffer ? d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength) : d);
+        if (cur.got + u.length > cur.size) { cur.bad = true; return; }
+        cur.buf.set(u, cur.got); cur.got += u.length;
+        cur.row.textContent = cur.name + " — " + Math.round(cur.got / cur.size * 100) + "%";
+        return;
+      }
+      if (!d || typeof d !== "object") return;
+      if (d.t === "hello") {
+        var model = $("tv-model") ? $("tv-model").textContent : "";
+        conn.send({ t: "hi", tv: /Samsung/.test(model) ? model : "TV" });
+      } else if (d.t === "start") {
+        var ok = ROM_EXT.test(d.name || "") && d.size > 0 && d.size <= 16 * 1048576;
+        var li = document.createElement("li");
+        $("phone-list").insertBefore(li, $("phone-list").firstChild);
+        if (!ok) { li.textContent = d.name + " — recusado"; conn.send({ t: "fail", id: d.id, msg: "a TV recusou o arquivo" }); cur = null; return; }
+        cur = { id: d.id, name: d.name, size: d.size, got: 0, buf: new Uint8Array(d.size), row: li };
+        li.textContent = d.name + " — 0%";
+        phoneStatus("Recebendo " + d.name + "…", "ok");
+      } else if (d.t === "end" && cur && cur.id === d.id) {
+        var f = cur; cur = null;
+        if (f.bad || f.got !== f.size) { f.row.textContent = f.name + " — falhou"; conn.send({ t: "fail", id: f.id, msg: "chegou incompleto" }); return; }
+        romsPut({ name: f.name, size: f.size, data: f.buf.buffer, added: Date.now() }).then(function () {
+          f.row.textContent = f.name + " — salvo ✓";
+          f.row.className = "ok";
+          phone && phone.received++;
+          conn.send({ t: "saved", id: f.id });
+          phoneStatus("Jogo recebido! Pode mandar mais ou apertar VOLTAR.", "ok");
+        }, function () {
+          f.row.textContent = f.name + " — sem espaço na TV";
+          conn.send({ t: "fail", id: f.id, msg: "sem espaço na TV" });
+        });
+      }
+    });
+    conn.on("close", function () { if (phone) phoneStatus("Celular desconectado. Aponte a câmera de novo para conectar.", ""); });
+  }
+
+  function closePhone() {
+    $("phone").hidden = true;
+    state.view = "launcher";
+    var got = phone ? phone.received : 0;
+    if (phone && phone.peer) { try { phone.peer.destroy(); } catch (e) {} }
+    phone = null;
+    padPrev = {};
+    if (got) { toast(got === 1 ? "1 jogo adicionado" : got + " jogos adicionados", 2200); refresh(true); }
   }
 
   // ====================================================================

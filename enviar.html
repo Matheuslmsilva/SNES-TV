@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#141219">
+<title>Enviar jogos para a TV</title>
+<style>
+  :root {
+    --bg: #141219; --card: #1f1b27; --ink: #ece9f2; --muted: #9a94a8; --purple: #6c5fc7;
+    --ok: #8fe3a5; --err: #ff8f8f; --c-a: #d6383c; --c-b: #e8b71f; --c-x: #3a63c8; --c-y: #2f9a4e;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100vh; background: radial-gradient(ellipse at 30% -20%, #2a2440 0%, transparent 60%), var(--bg);
+    color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 24px 16px 40px;
+  }
+  main { max-width: 480px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  .dots { display: grid; grid-template-columns: repeat(2, 10px); gap: 3px; transform: rotate(45deg); }
+  .dots i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: 0.06em; }
+  .card { background: var(--card); border-radius: 16px; padding: 20px; margin-bottom: 16px; }
+  .status { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+  .status .led { width: 12px; height: 12px; border-radius: 50%; background: var(--muted); flex: none; }
+  .status.ok .led { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+  .status.err .led { background: var(--err); }
+  .status.wait .led { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.3; } }
+  .sub { color: var(--muted); font-size: 14px; margin: 6px 0 0; }
+  button, .btn {
+    display: block; width: 100%; border: 0; border-radius: 14px; padding: 18px; margin-top: 16px;
+    background: var(--purple); color: #fff; font: 700 18px/1 inherit; cursor: pointer; text-align: center;
+  }
+  button:disabled { opacity: 0.4; }
+  .code { display: flex; gap: 8px; margin-top: 12px; }
+  .code input {
+    flex: 1; min-width: 0; font: 700 22px/1 ui-monospace, monospace; letter-spacing: 0.25em; text-transform: uppercase;
+    background: #15121b; color: var(--ink); border: 1px solid #3a3546; border-radius: 12px; padding: 14px;
+  }
+  .code button { width: auto; margin: 0; padding: 0 20px; font-size: 16px; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { padding: 12px 0; border-bottom: 1px solid #2c2736; }
+  li:last-child { border-bottom: 0; }
+  .row { display: flex; justify-content: space-between; gap: 12px; }
+  .name { font-weight: 600; overflow-wrap: anywhere; }
+  .st { color: var(--muted); font-size: 14px; white-space: nowrap; }
+  .st.ok { color: var(--ok); } .st.err { color: var(--err); }
+  .bar { height: 6px; background: #2c2736; border-radius: 3px; margin-top: 8px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--purple); transition: width 0.2s; }
+  .hint { color: var(--muted); font-size: 14px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="dots"><i style="background:var(--c-y)"></i><i style="background:var(--c-x)"></i><i style="background:var(--c-a)"></i><i style="background:var(--c-b)"></i></span>
+    <h1>Enviar jogos para a TV</h1>
+  </header>
+
+  <section class="card">
+    <div id="status" class="status wait"><span class="led"></span><span id="status-text">Conectando à TV…</span></div>
+    <p id="status-sub" class="sub"></p>
+    <form id="code-form" class="code" hidden>
+      <input id="code" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="CÓDIGO" aria-label="Código mostrado na TV">
+      <button type="submit">Conectar</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <label class="btn" id="pick-label" for="files" aria-disabled="true">Escolher jogos</label>
+    <input id="files" type="file" multiple hidden disabled>
+    <p class="hint">Arquivos de Super Nintendo: <b>.sfc</b>, <b>.smc</b> ou <b>.zip</b>. Eles ficam salvos na TV.</p>
+    <ul id="list"></ul>
+  </section>
+
+  <p class="hint">Deixe a tela do QR Code aberta na TV enquanto envia. Funciona mesmo que o celular esteja no 4G.</p>
+</main>
+
+<script src="lib/peerjs.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  var ROM_EXT = /\.(sfc|smc|swc|fig|zip|7z)$/i;
+  var CHUNK = 64 * 1024;
+  var $ = function (id) { return document.getElementById(id); };
+  var peer = null, conn = null, timer = null, seq = 0, waiting = {};
+
+  function setStatus(kind, text, sub) {
+    $("status").className = "status " + kind;
+    $("status-text").textContent = text;
+    $("status-sub").textContent = sub || "";
+  }
+  function enablePick(on) {
+    $("files").disabled = !on;
+    $("pick-label").style.opacity = on ? "1" : "0.4";
+  }
+  enablePick(false);
+
+  function askCode(msg) {
+    setStatus("err", msg || "Digite o código que aparece na TV");
+    $("code-form").hidden = false;
+    $("code").focus();
+  }
+
+  function connect(code) {
+    code = (code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (code.length !== 6) { askCode(); return; }
+    $("code-form").hidden = true;
+    if (typeof Peer === "undefined" && !(window.peerjs && window.peerjs.Peer)) { setStatus("err", "Não foi possível carregar a página. Recarregue."); return; }
+    var P = window.Peer || window.peerjs.Peer;
+    if (peer) { try { peer.destroy(); } catch (e) {} }
+    setStatus("wait", "Conectando à TV…", "Código " + code);
+    peer = new P();
+    clearTimeout(timer);
+    timer = setTimeout(function () {
+      if (!conn || !conn.open) askCode("Não achei a TV. Confira se a tela do QR Code está aberta e o código está certo.");
+    }, 20000);
+    peer.on("open", function () {
+      conn = peer.connect("snestv-tv-" + code, { reliable: true, serialization: "binary" });
+      conn.on("open", function () {
+        clearTimeout(timer);
+        conn.send({ t: "hello" });
+        setStatus("ok", "Conectado à TV", "Escolha os jogos abaixo.");
+        enablePick(true);
+      });
+      conn.on("data", function (d) {
+        if (!d || typeof d !== "object") return;
+        if (d.t === "hi" && d.tv) setStatus("ok", "Conectado à " + d.tv, "Escolha os jogos abaixo.");
+        if ((d.t === "saved" || d.t === "fail") && waiting[d.id]) { waiting[d.id](d); delete waiting[d.id]; }
+      });
+      conn.on("close", function () { enablePick(false); setStatus("err", "A TV fechou a conexão", "Abra de novo a tela do QR Code na TV."); });
+      conn.on("error", function () { setStatus("err", "Erro na conexão com a TV"); });
+    });
+    peer.on("error", function (err) {
+      clearTimeout(timer);
+      if (err.type === "peer-unavailable") askCode("Não achei a TV com esse código. A tela do QR Code está aberta?");
+      else if (err.type === "browser-incompatible") setStatus("err", "Este navegador não suporta o envio. Tente o Chrome.");
+      else setStatus("err", "Sem conexão com a internet", String(err.type || err));
+    });
+  }
+
+  $("code-form").addEventListener("submit", function (e) { e.preventDefault(); connect($("code").value); });
+
+  function fmt(n) { return n >= 1048576 ? (n / 1048576).toFixed(1).replace(".", ",") + " MB" : Math.round(n / 1024) + " KB"; }
+
+  function addRow(name, size) {
+    var li = document.createElement("li");
+    li.innerHTML = '<div class="row"><span class="name"></span><span class="st"></span></div><div class="bar"><i></i></div>';
+    li.querySelector(".name").textContent = name;
+    li.querySelector(".st").textContent = fmt(size);
+    $("list").insertBefore(li, $("list").firstChild);
+    return {
+      st: function (text, kind) { var s = li.querySelector(".st"); s.textContent = text; s.className = "st " + (kind || ""); },
+      bar: function (p) { li.querySelector(".bar i").style.width = Math.round(p * 100) + "%"; }
+    };
+  }
+
+  function readFile(f) {
+    if (f.arrayBuffer) return f.arrayBuffer();
+    return new Promise(function (res, rej) {
+      var r = new FileReader(); r.onload = function () { res(r.result); }; r.onerror = rej; r.readAsArrayBuffer(f);
+    });
+  }
+
+  function sendFile(f) {
+    var row = addRow(f.name, f.size);
+    if (!ROM_EXT.test(f.name)) { row.st("não é jogo de SNES", "err"); return Promise.resolve(); }
+    if (f.size > 16 * 1048576) { row.st("arquivo grande demais", "err"); return Promise.resolve(); }
+    var id = ++seq;
+    row.st("enviando…");
+    return readFile(f).then(function (buf) {
+      conn.send({ t: "start", id: id, name: f.name, size: buf.byteLength });
+      for (var off = 0; off < buf.byteLength; off += CHUNK) conn.send(buf.slice(off, off + CHUNK));
+      conn.send({ t: "end", id: id });
+      // progresso: quanto já saiu do buffer do canal
+      var total = buf.byteLength, iv = setInterval(function () {
+        var dc = conn.dataChannel, pend = 0;
+        try { pend = (conn.bufferSize || 0) * CHUNK + (dc ? dc.bufferedAmount : 0); } catch (e) {}
+        row.bar(Math.max(0, Math.min(1, 1 - pend / total)));
+      }, 200);
+      return new Promise(function (res) {
+        var to = setTimeout(function () { delete waiting[id]; clearInterval(iv); row.st("sem resposta da TV", "err"); res(); }, 120000);
+        waiting[id] = function (d) {
+          clearTimeout(to); clearInterval(iv); row.bar(1);
+          if (d.t === "saved") row.st("salvo na TV ✓", "ok"); else row.st(d.msg || "a TV recusou", "err");
+          res();
+        };
+      });
+    }).catch(function () { row.st("não consegui ler o arquivo", "err"); });
+  }
+
+  $("files").addEventListener("change", function (e) {
+    var files = Array.prototype.slice.call(e.target.files || []);
+    e.target.value = "";
+    if (!conn || !conn.open) return;
+    files.reduce(function (p, f) { return p.then(function () { return sendFile(f); }); }, Promise.resolve());
+  });
+
+  var code = (location.hash || "").replace("#", "");
+  if (code) connect(code); else askCode();
+})();
+</script>
+</body>
+</html>

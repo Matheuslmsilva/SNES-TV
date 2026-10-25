@@ -191,3 +191,17 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 @keyframes blink { 50% { fill: #fff; } }
 .wiz-ask { font-size: 1.7rem; font-weight: 800; margin: 0.6rem 0 0.2rem; }
 .wiz-msg { color: #ffb36b; min-height: 1.4rem; margin: 0 0 0.6rem; }
+
+/* ---------- Enviar pelo celular ---------- */
+.panel.phone-panel { display: flex; align-items: center; width: 64rem; max-width: 92vw; }
+.phone-qr-box { background: #fff; border-radius: 1rem; padding: 0.8rem; flex: none; margin-right: 2.6rem; }
+.phone-qr { width: 19rem; height: 19rem; display: flex; align-items: center; justify-content: center; color: #555; }
+.phone-qr svg { width: 100%; height: 100%; display: block; }
+.phone-side { flex: 1; min-width: 0; }
+.phone-steps { margin: 0 0 0.8rem; padding-left: 1.4rem; font-size: 1.15rem; line-height: 1.7; }
+.phone-code { font: 800 2.6rem/1.2 ui-monospace, "Courier New", monospace; letter-spacing: 0.3em; color: var(--focus); margin: 0.4rem 0; }
+.phone-status { font-size: 1.15rem; font-weight: 600; margin: 0.4rem 0; }
+.phone-status.ok { color: #8fe3a5; } .phone-status.err { color: #ff8f8f; }
+.phone-list { list-style: none; padding: 0; margin: 0 0 0.6rem; max-height: 7.5rem; overflow: hidden; font-size: 0.95rem; color: var(--muted); }
+.phone-list li.ok { color: var(--ink); }
+#phone-url { color: var(--ink); }
