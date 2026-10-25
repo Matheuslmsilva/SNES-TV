@@ -1024,13 +1024,14 @@
     }
 
     if (state.view === "name") {
+      if (formKey(e, c, ["name-input", "name-ok", "name-back"], saveName, function () { if (userName()) closeName(); })) return;
       // 65376 = "Concluído" do teclado da Samsung
       if (c === K.ENTER || c === 65376) { e.preventDefault(); saveName(); }
-      else if ((c === K.BACK || c === K.ESC || c === 65385) && userName()) { e.preventDefault(); closeName(); }
       return;                    // as outras teclas vão para o campo de texto
     }
 
     if (state.view === "ra") {
+      if (formKey(e, c, ["ra-user", "ra-pass", "ra-ok", "ra-out", "ra-back"], raSubmit, closeRa)) return;
       var inField = document.activeElement && document.activeElement.tagName === "INPUT";
       if (c === K.ENTER || c === 65376) {
         e.preventDefault();
@@ -1039,7 +1040,6 @@
       } else if (c === K.BACK || c === K.ESC || c === 65385 || (!inField && c === K.BACKSPACE)) { e.preventDefault(); closeRa(); }
       else if (c === K.DOWN && !RA.user()) { e.preventDefault(); $("ra-pass").focus(); }
       else if (c === K.UP && !RA.user()) { e.preventDefault(); $("ra-user").focus(); }
-      else if ((c === K.RED || (!inField && c === 82)) && RA.user()) { e.preventDefault(); raLogout(); }
       return;                    // as outras teclas vão para o campo de texto
     }
 
@@ -1353,6 +1353,8 @@
           if (right) { state.delBtn = Math.min(2, state.delBtn + 1); paintDel(); }
           if (hit(BTN.B) || hit(BTN.A)) confirmDel();
           if (back) closeDel();
+        } else if (state.view === "name") {
+          if (back && userName()) closeName();
         } else if (state.view === "ra") {
           if (back) closeRa();
           if (hit(BTN.X) && RA.user()) raLogout();
@@ -2258,9 +2260,10 @@
     var u = RA.user();
     $("ra-form").hidden = !!u;
     $("ra-logged").hidden = !u;
+    $("ra-ok").hidden = !!u; $("ra-out").hidden = !u;
     if (u) { $("ra-name").textContent = u.name; $("ra-score").textContent = (u.score || 0) + " pontos"; }
-    $("ra-keys").innerHTML = u ? "<kbd class=\"key-dot c-a\"></kbd> sair da conta · <kbd>VOLTAR</kbd> fechar" :
-      "<kbd>▲ ▼</kbd> trocar campo · <kbd>OK</kbd> entrar · <kbd>VOLTAR</kbd> fechar";
+    $("ra-keys").innerHTML = "<kbd>▲ ▼ ◀ ▶</kbd> escolher · <kbd>OK</kbd> confirmar · <kbd class=\"key-dot c-a\"></kbd> ou <kbd>VOLTAR</kbd> voltar";
+    if (u) setTimeout(function () { try { $("ra-back").focus(); } catch (e) {} }, 60);
     var st = $("ra-status");
     st.textContent = msg || "";
     st.className = "pair-status" + (cls ? " " + cls : "");
@@ -2327,11 +2330,42 @@
     var n = userName();
     $("greet").textContent = n ? "Seja bem-vindo, " + n + "!" : "Seja bem-vindo!";
   }
+  // telas com campo de texto: setas andam entre campo e botões; VERMELHO/VOLTAR = voltar
+  function formKey(e, c, ids, onEnter, onBack) {
+    var items = ids.map($).filter(function (el) { return el && !el.hidden && el.offsetParent !== null; });
+    var a = document.activeElement, i = items.indexOf(a), onBtn = a && a.tagName === "BUTTON";
+    if (c === K.BACK || c === K.ESC || c === 65385 || c === K.RED || (onBtn && c === K.BACKSPACE)) {
+      e.preventDefault(); onBack(); return true;
+    }
+    if (c === K.DOWN || (onBtn && c === K.RIGHT)) {
+      e.preventDefault();
+      state.formNav = Date.now();
+      var n = items[Math.min(items.length - 1, i + 1)];
+      if (n) n.focus();
+      return true;
+    }
+    if (c === K.UP || (onBtn && c === K.LEFT)) {
+      e.preventDefault();
+      state.formNav = Date.now();
+      var pv = items[Math.max(0, i - 1)];
+      if (pv) pv.focus();
+      return true;
+    }
+    if (onBtn && (c === K.ENTER || c === 65376)) { e.preventDefault(); a.click(); return true; }
+    return false;
+  }
+  $("name-ok").addEventListener("click", function () { saveName(); });
+  $("name-back").addEventListener("click", function () { if (userName()) closeName(); });
+  $("ra-ok").addEventListener("click", function () { raSubmit(); });
+  $("ra-out").addEventListener("click", function () { raLogout(); });
+  $("ra-back").addEventListener("click", function () { closeRa(); });
+
   function openName() {
     state.view = "name";
     $("name-box").hidden = false;
     var i = $("name-input");
     i.value = userName();
+    $("name-back").hidden = !userName();
     setTimeout(function () {
       try { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } catch (e) {}
     }, 80);
@@ -2353,6 +2387,8 @@
   }
   // quando o teclado da TV fecha com "Concluído", o campo dispara "change"
   $("name-input").addEventListener("change", function () {
+    // saiu do campo com as setas (para ir aos botões): não salva sozinho
+    if (Date.now() - (state.formNav || 0) < 500) return;
     if (state.view === "name" && $("name-input").value.replace(/\s/g, "")) saveName();
   });
 

@@ -308,7 +308,8 @@
     <h2>Olá! Como você se chama?</h2>
     <p class="muted">Seu nome vai aparecer na tela inicial.</p>
     <input id="name-input" class="name-input" type="text" maxlength="20" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Digite seu nome">
-    <p class="muted small center"><kbd>OK</kbd> continuar · selecione o campo para abrir o teclado da TV</p>
+    <div class="form-btns"><button id="name-ok" class="fbtn main" type="button">Salvar</button><button id="name-back" class="fbtn" type="button">Voltar</button></div>
+    <p class="muted small center"><kbd>▲ ▼ ◀ ▶</kbd> escolher · <kbd>OK</kbd> confirmar · <kbd class="key-dot c-a"></kbd> ou <kbd>VOLTAR</kbd> voltar</p>
   </div>
 </div>
 
@@ -326,6 +327,7 @@
     </div>
     <div id="ra-logged" class="ra-logged" hidden>Conectado como <b id="ra-name"></b> · <span id="ra-score"></span></div>
     <p id="ra-status" class="pair-status"></p>
+    <div class="form-btns"><button id="ra-ok" class="fbtn main" type="button">Entrar</button><button id="ra-out" class="fbtn" type="button">Sair da conta</button><button id="ra-back" class="fbtn" type="button">Voltar</button></div>
     <p class="muted small center" id="ra-keys"></p>
   </div>
 </div>
