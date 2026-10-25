@@ -1028,8 +1028,29 @@
   // ====================================================================
   var isBack = function (c) { return c === K.BACK || c === K.ESC || c === K.BACKSPACE; };
 
+  // Navegador da TV: a tecla VOLTAR do controle remoto às vezes não chega à página — o navegador
+  // usa ela para "voltar no histórico". Deixamos uma entrada extra no histórico e, quando o
+  // navegador volta, tratamos como VOLTAR do app.
+  var lastBackKey = 0, guardOn = false;
+  function armBackGuard() {
+    if (guardOn || IS_TIZEN) return;
+    try { history.pushState({ snestv: 1 }, ""); guardOn = true; } catch (e) {}
+  }
+  window.addEventListener("popstate", function () {
+    guardOn = false;
+    if (Date.now() - lastBackKey < 400) { armBackGuard(); return; }   // a tecla já foi tratada
+    if (state.view === "launcher") return;     // na lista: deixa o navegador sair normalmente
+    var ev;
+    try { ev = document.createEvent("Event"); ev.initEvent("keydown", true, true); } catch (e) { return; }
+    try { Object.defineProperty(ev, "keyCode", { get: function () { return K.BACK; } }); } catch (e) { return; }
+    try { document.activeElement && document.activeElement.blur && document.activeElement.tagName === "INPUT" && document.activeElement.blur(); } catch (e) {}
+    window.dispatchEvent(ev);
+    armBackGuard();
+  });
+
   window.addEventListener("keydown", function (e) {
     var c = e.keyCode;
+    if (c === K.BACK || c === K.ESC || c === 65385) lastBackKey = Date.now();
     if (c === K.EXIT) return;   // deixa a TV tratar o EXIT
 
     if (state.view === "net" && state.netMode === "join") {
@@ -1191,17 +1212,35 @@
     return Math.abs(v - parseFloat(m[4])) < 0.12;
   }
 
+  // eixos "presos" (gatilho parado em -1, analógico com defeito): ignorados até se mexerem
+  var axisWatch = {};
+  function axisVal(p, i) {
+    var v = p.axes[i];
+    if (v === undefined || v !== v) return 0;
+    var key = p.index + "|" + i, w = axisWatch[key], now = Date.now();
+    if (!w || Math.abs(v - w.v) > 0.02) { axisWatch[key] = { v: v, t: now, moved: !!w }; return v; }
+    // parado longe do centro desde que o controle conectou → não é um analógico (ou está descalibrado)
+    if (!w.moved && Math.abs(v) > 0.3 && now - w.t > 1500) return 0;
+    return v;
+  }
+  function stickToDpad(out, ax, ay) {
+    // zona morta circular de 45%; diagonais quando o ângulo fica entre duas direções
+    if (Math.sqrt(ax * ax + ay * ay) < 0.45) return;
+    if (ax < -0.38) out[BTN.LEFT] = true; if (ax > 0.38) out[BTN.RIGHT] = true;
+    if (ay < -0.38) out[BTN.UP] = true; if (ay > 0.38) out[BTN.DOWN] = true;
+  }
   function readPad(p) {
     var map = customMap(p), out = {}, k;
     var m = map || STD_MAP;
     for (k in m) if (tokenOn(p, m[k])) out[k] = true;
+    // analógico esquerdo → direcional (também nos joysticks configurados pelo assistente,
+    // a não ser que o assistente já tenha usado esses eixos)
+    var usesAxes = false;
+    if (map) for (k in map) if (/^a[01]\b|^a[01][+=-]/.test(map[k])) usesAxes = true;
+    if (!usesAxes) stickToDpad(out, axisVal(p, 0), axisVal(p, 1));
+    // analógico direito também anda (controle padrão: eixos 2 e 3)
+    if (!map && p.mapping === "standard" && p.axes.length >= 4) stickToDpad(out, axisVal(p, 2), axisVal(p, 3));
     if (!map) {
-      // analógico esquerdo → direcional (zona morta de 40%, diagonais incluídas)
-      var ax = p.axes[0] || 0, ay = p.axes[1] || 0;
-      if (Math.sqrt(ax * ax + ay * ay) > 0.45) {
-        if (ax < -0.4) out[BTN.LEFT] = true; if (ax > 0.4) out[BTN.RIGHT] = true;
-        if (ay < -0.4) out[BTN.UP] = true; if (ay > 0.4) out[BTN.DOWN] = true;
-      }
       // controles "não padrão" (alguns PS4/genéricos por Bluetooth): direcional num eixo "hat"
       if (p.mapping !== "standard" && p.axes.length > 9) {
         var h = p.axes[9];
@@ -1295,6 +1334,7 @@
   var padPrev = {};
   function pollPads() {
     try {
+      if (!guardOn && state.view !== "launcher") armBackGuard();
       var pads = connectedPads();
       trackConnections(pads);
       if (state.view === "wizard") {
