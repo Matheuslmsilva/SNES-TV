@@ -556,13 +556,39 @@
 
   // Modo leve: o emulador desenha numa tela pequena (640x480) e a TV amplia.
   // Isso tira muito trabalho da placa de vídeo da TV.
+  function crtOn() { try { return localStorage.getItem("snestv.crt") !== "0"; } catch (e) { return true; } }
+
   function fitPlayer() {
+    var vw = window.innerWidth, vh = window.innerHeight, crt = crtOn();
+    // área 4:3 centralizada onde o jogo aparece (menor com o filtro, para caber a moldura do tubo)
+    var room = crt ? 0.9 : 1;
+    var gw = Math.min(vw * room, vh * room * 4 / 3), gh = gw * 3 / 4;
+    var gx = Math.round((vw - gw) / 2), gy = Math.round((vh - gh) / 2);
+
     var pl = $("stage");
-    if (!$("game").classList.contains("light")) { pl.style.transform = ""; pl.style.left = pl.style.top = ""; return; }
-    var W = pl.offsetWidth || 640, H = pl.offsetHeight || 480, k = Math.min(window.innerWidth / W, window.innerHeight / H);
-    pl.style.transform = "scale(" + k + ")";
-    pl.style.left = Math.round((window.innerWidth - W * k) / 2) + "px";
-    pl.style.top = Math.round((window.innerHeight - H * k) / 2) + "px";
+    if ($("game").classList.contains("light")) {
+      pl.style.width = pl.style.height = "";
+      var W = pl.offsetWidth || 640, H = pl.offsetHeight || 480, k = gh / H;
+      pl.style.transform = "scale(" + k + ")";
+      pl.style.left = Math.round((vw - W * k) / 2) + "px";
+      pl.style.top = gy + "px";
+    } else if (crt) {
+      pl.style.transform = "";
+      pl.style.position = "absolute";
+      pl.style.left = gx + "px"; pl.style.top = gy + "px";
+      pl.style.width = Math.round(gw) + "px"; pl.style.height = Math.round(gh) + "px";
+    } else {
+      pl.style.transform = ""; pl.style.position = "";
+      pl.style.left = pl.style.top = pl.style.width = pl.style.height = "";
+    }
+
+    // Filtro de TV de tubo: uma camada por cima da imagem (não pesa no emulador)
+    var el = $("crt");
+    el.hidden = !crt;
+    $("game").classList.toggle("crt-on", crt);
+    el.style.left = gx + "px"; el.style.top = gy + "px";
+    el.style.width = Math.round(gw) + "px"; el.style.height = Math.round(gh) + "px";
+    el.style.setProperty("--line", (gh / 224).toFixed(3) + "px");   // 224 linhas do SNES
   }
   window.addEventListener("resize", fitPlayer);
 
@@ -615,6 +641,7 @@
     $("turbo-state").textContent = state.turbo ? "ligada" : "desligada";
     $("perf-state").textContent = PERF_NAMES[perfMode()];
     $("fps-state").textContent = showFps() ? "sim" : "não";
+    $("crt-state").textContent = crtOn() ? "ligado" : "desligado";
     $("menu").hidden = false;
     paintMenu();
   }
@@ -665,6 +692,12 @@
       try { localStorage.setItem("snestv.autostart", gameKey(state.current)); } catch (e) {}
       $("perf-state").textContent = PERF_NAMES[next];
       return exitGame("Reabrindo em " + PERF_NAMES[next] + "…");
+    }
+    if (act === "crt") {
+      try { localStorage.setItem("snestv.crt", crtOn() ? "0" : "1"); } catch (e) {}
+      $("crt-state").textContent = crtOn() ? "ligado" : "desligado";
+      fitPlayer();
+      return;
     }
     if (act === "fps") {
       try { localStorage.setItem("snestv.fps", showFps() ? "0" : "1"); } catch (e) {}
