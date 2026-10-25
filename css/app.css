@@ -36,7 +36,11 @@ body {
 }
 .brand { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; }
 .brand .dots { margin-right: 1.4rem; }
-.brand h1 { margin: 0; font-size: 2.3rem; letter-spacing: 0.12em; font-weight: 800; }
+.brand-name { font-size: 1rem; font-weight: 800; letter-spacing: 0.3em; color: #b9adff; }
+.brand h1 { margin: 0.1rem 0 0; font-size: 2.3rem; font-weight: 800; line-height: 1.15; }
+.greet { border-radius: 0.6rem; padding: 0 0.4rem; margin-left: -0.4rem !important; }
+.greet.focused { background: #6c5fc7; }
+.greet.focused:after { content: "  ✎ trocar nome"; font-size: 1rem; font-weight: 600; color: #e5e0ff; }
 .dots { display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; width: 2.1rem; -webkit-transform: rotate(45deg); transform: rotate(45deg); }
 .dots i { margin: 0.125rem; }
 .dots i { width: 0.8rem; height: 0.8rem; border-radius: 50%; display: block; }
@@ -312,3 +316,19 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 .det-ach li b { font-weight: 700; margin-right: 0.5rem; white-space: nowrap; }
 .det-ach li span { color: #9a94a8; font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .det-note { color: #9a94a8; font-size: 0.95rem; line-height: 1.5; }
+
+/* ---------- Nome ---------- */
+.name-overlay { background: rgba(10, 8, 14, 0.94); }
+.panel.name-panel { width: 44rem; text-align: center; padding: 2.6rem 3rem 2rem; }
+.name-panel .dots.big { display: -webkit-inline-flex; display: inline-flex; width: 3.2rem; margin: 0.6rem 0 1.6rem; }
+.name-panel .dots.big i { width: 1.2rem; height: 1.2rem; margin: 0.2rem; border-radius: 50%; }
+.name-panel h2 { font-size: 2.2rem; }
+.name-input {
+  display: block; width: 100%; margin: 1.6rem 0 1.2rem; padding: 1rem 1.4rem; text-align: center;
+  font-family: inherit; font-weight: 700; font-size: 2rem; line-height: 1.2; color: #fff; background: #120f17; border: 0.15rem solid #6c5fc7; border-radius: 0.9rem; outline: none;
+}
+.name-input:focus { border-color: #b9adff; box-shadow: 0 0 0 0.3rem rgba(185,173,255,0.25); }
+
+/* ---------- Ícones dos cartuchos ---------- */
+.cart-label span svg { display: block; width: 5rem; height: auto; }
+.det-cover .cart-label span svg { width: 5.6rem; }

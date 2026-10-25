@@ -64,6 +64,22 @@
     toast._t = setTimeout(function () { t.hidden = true; }, ms || 2600);
   }
 
+  var ICONS = {
+    pair: '<svg viewBox="0 0 64 40" aria-hidden="true"><path d="M16 4h32a14 14 0 0 1 0 28c-5 0-8-3-10-6H26c-2 3-5 6-10 6A14 14 0 0 1 16 4z" fill="#ece9f2"/>' +
+      '<path d="M15 12v10M10 17h10" stroke="#332e45" stroke-width="3.5" stroke-linecap="round"/>' +
+      '<circle cx="46" cy="12.5" r="3.2" fill="#3a63c8"/><circle cx="52" cy="18" r="3.2" fill="#d6383c"/>' +
+      '<circle cx="46" cy="23.5" r="3.2" fill="#e8b71f"/><circle cx="40" cy="18" r="3.2" fill="#2f9a4e"/></svg>',
+    phone: '<svg viewBox="0 0 56 48" aria-hidden="true"><path d="M8 4h32a3 3 0 0 1 3 3v26h-4v8H12v-8H5V7a3 3 0 0 1 3-3z" fill="#cfcbd6"/>' +
+      '<path d="M9 7h30" stroke="#a9a4b3" stroke-width="2" stroke-dasharray="2 2"/>' +
+      '<rect x="10" y="11" width="28" height="15" rx="2" fill="#6c5fc7"/>' +
+      '<circle cx="44" cy="36" r="10" fill="#8fe3a5" stroke="#332e45" stroke-width="2.5"/>' +
+      '<path d="M44 31v10M39 36h10" stroke="#1d1a24" stroke-width="3" stroke-linecap="round"/></svg>'
+  };
+  function setInitial(span, g, initial) {
+    if (g.action && ICONS[g.action]) span.innerHTML = ICONS[g.action];
+    else span.textContent = initial;
+  }
+
   function labelBg(h, action) {
     if (action) return "repeating-linear-gradient(135deg, #3b3550 0, #3b3550 0.8rem, #332e45 0.8rem, #332e45 1.6rem)";
     return "linear-gradient(160deg, hsl(" + h + ",55%,46%), hsl(" + ((h + 40) % 360) + ",60%,28%))";
@@ -373,7 +389,7 @@
       el.innerHTML =
         '<div class="cart"><div class="shell"><div class="cart-label" style="background:' + labelBg(hue, g.action) + '"><span></span></div></div></div>' +
         '<div class="title"></div><div class="meta"></div>';
-      el.querySelector(".cart-label span").textContent = initial;
+      setInitial(el.querySelector(".cart-label span"), g, initial);
       if (!g.action) putCover(el.querySelector(".cart-label"), coverUrl(g));
       var cn = g.action ? null : coverName(g);
       el.querySelector(".title").textContent = cn ? cleanTitle(cn).title : g.title;
@@ -395,6 +411,14 @@
   }
 
   function setFocus() {
+    $("greet").classList.toggle("focused", state.focus === -1);
+    if (state.focus === -1) {
+      var all = $("grid").children;
+      for (var j = 0; j < all.length; j++) all[j].classList.remove("focused");
+      state.firstRow = 0;
+      $("grid").style.transform = "translateY(0px)";
+      return;
+    }
     showDetails(state.items && state.items[state.focus]);
     var tiles = $("grid").children;
     for (var i = 0; i < tiles.length; i++) tiles[i].classList.toggle("focused", i === state.focus);
@@ -414,6 +438,8 @@
     var n = state.items ? state.items.length : 0;
     if (!n) return;
     var f = state.focus;
+    if (f === -1) { if (dy > 0) { state.focus = 0; setFocus(); } return; }
+    if (dy < 0 && f < COLS) { state.focus = -1; setFocus(); return; }
     if (dx) f = Math.min(n - 1, Math.max(0, f + dx));
     if (dy) {
       var t = f + dy * COLS;
@@ -425,6 +451,7 @@
   }
 
   function activate() {
+    if (state.focus === -1) { openName(); return; }
     var g = state.items && state.items[state.focus];
     if (!g) return;
     if (g.action === "open") { $("file-input").click(); return; }
@@ -912,6 +939,13 @@
   window.addEventListener("keydown", function (e) {
     var c = e.keyCode;
     if (c === K.EXIT) return;   // deixa a TV tratar o EXIT
+
+    if (state.view === "name") {
+      // 65376 = "Concluído" do teclado da Samsung
+      if (c === K.ENTER || c === 65376) { e.preventDefault(); saveName(); }
+      else if ((c === K.BACK || c === K.ESC || c === 65385) && userName()) { e.preventDefault(); closeName(); }
+      return;                    // as outras teclas vão para o campo de texto
+    }
 
     if (state.view === "game") {
       if (isBack(c)) { e.preventDefault(); e.stopPropagation(); openMenu(); return; }
@@ -1805,8 +1839,8 @@
       var old = lab.querySelector("img.cover"); if (old) lab.removeChild(old);
       lab.classList.remove("has-cover");
       lab.style.background = labelBg(g.action ? 250 : hashHue(g.title), g.action);
-      $("det-initial").textContent = g.action ? ({ phone: "QR", pair: "PAD", ach: "★", open: "+" }[g.action] || "+") :
-        (g.title.match(/[A-Za-z0-9]/) || ["?"])[0].toUpperCase();
+      setInitial($("det-initial"), g, g.action ? ({ ach: "★", open: "+" }[g.action] || "+") :
+        (g.title.match(/[A-Za-z0-9]/) || ["?"])[0].toUpperCase());
       if (!g.action) putCover(lab, coverUrl(g));
     }
     $("det-title").textContent = title;
@@ -1868,11 +1902,50 @@
   }
 
   // ====================================================================
+  // Nome do jogador e saudação
+  // ====================================================================
+  function userName() { try { return (localStorage.getItem("snestv.name") || "").trim(); } catch (e) { return ""; } }
+  function paintGreeting() {
+    var n = userName();
+    $("greet").textContent = n ? "Seja bem-vindo, " + n + "!" : "Seja bem-vindo!";
+  }
+  function openName() {
+    state.view = "name";
+    $("name-box").hidden = false;
+    var i = $("name-input");
+    i.value = userName();
+    setTimeout(function () {
+      try { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } catch (e) {}
+    }, 80);
+  }
+  function closeName() {
+    state.view = "launcher";              // antes do blur (o blur dispara "change")
+    try { $("name-input").blur(); } catch (e) {}
+    $("name-box").hidden = true;
+    if (state.focus === -1 && !state.items) state.focus = 0;
+    setFocus();
+  }
+  function saveName() {
+    var v = $("name-input").value.replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "").slice(0, 20);
+    if (!v) { toast("Digite seu nome", 1800); return; }
+    try { localStorage.setItem("snestv.name", v); } catch (e) {}
+    paintGreeting();
+    closeName();
+    toast("Bom jogo, " + v + "!", 2200);
+  }
+  // quando o teclado da TV fecha com "Concluído", o campo dispara "change"
+  $("name-input").addEventListener("change", function () {
+    if (state.view === "name" && $("name-input").value.replace(/\s/g, "")) saveName();
+  });
+
+  // ====================================================================
   // Início
   // ====================================================================
   function init() {
     registerTvKeys();
     Conquistas.onUnlock = showAch;
+    paintGreeting();
+    if (!userName()) setTimeout(openName, 300);
     showDeviceInfo();
     if (ctrlEnabled()) startCtrl();
     loadCovers().then(function () { if (state.view === "launcher" && state.items) renderGrid(); });

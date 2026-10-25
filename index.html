@@ -14,7 +14,8 @@
     <div class="brand">
       <span class="dots"><i class="c-y"></i><i class="c-x"></i><i class="c-a"></i><i class="c-b"></i></span>
       <div>
-        <h1>SNES&nbsp;TV</h1>
+        <div class="brand-name">SNES&nbsp;TV</div>
+        <h1 id="greet" class="greet">Seja bem-vindo!</h1>
         <div class="status">
           <span id="source-label">Procurando jogos…</span>
           <span id="count" class="count"></span>
@@ -221,6 +222,17 @@
     <p id="wiz-msg" class="wiz-msg"></p>
     <p class="muted small center"><span id="wiz-progress"></span> ·
       <kbd>OK</kbd> pular este botão · <kbd class="key-dot c-a"></kbd> voltar ao padrão · <kbd>VOLTAR</kbd> cancelar</p>
+  </div>
+</div>
+
+<!-- ============ NOME ============ -->
+<div id="name-box" class="overlay name-overlay" hidden>
+  <div class="panel name-panel">
+    <span class="dots big"><i class="c-y"></i><i class="c-x"></i><i class="c-a"></i><i class="c-b"></i></span>
+    <h2>Olá! Como você se chama?</h2>
+    <p class="muted">Seu nome vai aparecer na tela inicial.</p>
+    <input id="name-input" class="name-input" type="text" maxlength="20" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Digite seu nome">
+    <p class="muted small center"><kbd>OK</kbd> continuar · selecione o campo para abrir o teclado da TV</p>
   </div>
 </div>
 
