@@ -357,6 +357,12 @@
         var ag = all.filter(function (g) { return gameKey(g) === auto; })[0];
         if (ag) setTimeout(function () { startGame(ag); }, 50);
       }
+      var inv = null;
+      try { inv = localStorage.getItem("snestv.autoinvite"); localStorage.removeItem("snestv.autoinvite"); } catch (e) {}
+      if (inv) {
+        var ig = all.filter(function (g) { return gameKey(g) === inv; })[0];
+        if (ig) setTimeout(function () { state.netIdx = all.indexOf(ig); netHost(ig); }, 300);
+      }
       var label = [];
       if (IS_TIZEN) label.push(usb.drives ? (usb.drives === 1 ? "Pen drive conectado" : usb.drives + " pen drives") : "Nenhum pen drive");
       if (pcGames.length) label.push("Pasta do PC");
@@ -940,6 +946,7 @@
       return;
     }
     if (act === "restart") { E.restart(); closeMenu(); return; }
+    if (act === "invite") { netInvite(); return; }
     if (act === "engine") {
       if (!window.SNES_HAS_WASM) { toast("O emulador TV nova precisa de um navegador mais novo. Esta TV usa só o TV antiga.", 4000); return; }
       var ne = engineName() === "lite" ? "ejs" : "lite";
@@ -1089,10 +1096,15 @@
       else if (isBack(c)) closeDel();
     } else if (state.view === "net") {
       if (state.netMode === "home") {
-        if (c === K.LEFT || c === K.RIGHT) { state.netBtn = state.netBtn ? 0 : 1; paintNetBtns(); }
+        if (c === K.LEFT || c === K.RIGHT || c === K.UP || c === K.DOWN) { state.netBtn = state.netBtn ? 0 : 1; paintNetBtns(); }
         else if (c === K.ENTER) { if (state.netBtn === 0) netCreate(); else netShow("join"); }
         else if (isBack(c)) closeNet();
-      } else if (isBack(c)) closeNet();
+      } else if (state.netMode === "pick") {
+        if (c === K.UP || c === K.LEFT) netPickMove(-1);
+        else if (c === K.DOWN || c === K.RIGHT) netPickMove(1);
+        else if (c === K.ENTER) netHost(state.games[state.netIdx]);
+        else if (isBack(c)) netShow("home");
+      } else if (isBack(c)) { if (state.netMode === "host" && NET && NET.live) closeNet(); else if (state.netMode === "host") { netEnd(); netShow("pick"); } else closeNet(); }
     } else if (state.view === "ach") {
       if (c === K.GREEN || c === 71 /* G */) openRa("ach");
       else if (isBack(c) || c === K.ENTER) closeAch();
@@ -1353,6 +1365,21 @@
           if (right) { state.delBtn = Math.min(2, state.delBtn + 1); paintDel(); }
           if (hit(BTN.B) || hit(BTN.A)) confirmDel();
           if (back) closeDel();
+        } else if (state.view === "net") {
+          if (state.netMode === "home") {
+            if (left || right || up || down) { state.netBtn = state.netBtn ? 0 : 1; paintNetBtns(); }
+            if (ok) { if (state.netBtn === 0) netCreate(); else netShow("join"); }
+            if (back) closeNet();
+          } else if (state.netMode === "pick") {
+            if (up || left) netPickMove(-1);
+            if (down || right) netPickMove(1);
+            if (ok) netHost(state.games[state.netIdx]);
+            if (back) netShow("home");
+          } else if (back) {
+            if (state.netMode === "host" && NET && NET.live) closeNet();
+            else if (state.netMode === "host") { netEnd(); netShow("pick"); }
+            else closeNet();
+          }
         } else if (state.view === "name") {
           if (back && userName()) closeName();
         } else if (state.view === "ra") {
@@ -2434,8 +2461,9 @@
     state.view = "net";
     state.netMode = mode;
     $("net").hidden = false;
-    ["home", "host", "join"].forEach(function (m) { $("net-" + m).hidden = m !== mode; });
+    ["home", "pick", "host", "join"].forEach(function (m) { $("net-" + m).hidden = m !== mode; });
     if (mode === "home") { state.netBtn = state.netBtn || 0; paintNetBtns(); }
+    if (mode === "pick") paintNetList();
     if (mode === "join") setTimeout(function () { try { $("net-code").focus(); } catch (e) {} }, 80);
   }
   function paintNetBtns() {
@@ -2446,7 +2474,15 @@
   function openNet() { netShow("home"); }
   function closeNet(keep) {
     $("net").hidden = true;
+    var live = NET && NET.live && !NET.started;
     state.view = "launcher";
+    if (live || (state.netLiveBack && LITE)) {
+      // cancelou o convite feito durante o jogo: volta para o menu do jogo
+      state.netLiveBack = false;
+      netEnd();
+      state.view = "menu"; $("menu").hidden = false; padPrev = {};
+      return;
+    }
     padPrev = {};
     try { $("net-code").blur(); } catch (e) {}
     if (!keep) netEnd();
@@ -2462,21 +2498,63 @@
 
   // ---------------- anfitrião ----------------
   function netCreate() {
-    state.netPick = true;
-    closeNet(true);
-    $("net-banner").hidden = false;
-    toast("Escolha na lista o jogo da partida online e aperte OK", 3500);
+    if (!state.games || !state.games.length) { toast("Coloque um jogo na lista primeiro (pen drive ou celular)", 3500); return; }
+    if (state.netIdx == null || state.netIdx >= state.games.length) {
+      var f = state.items && state.items[state.focus];
+      state.netIdx = Math.max(0, f && !f.action ? state.games.indexOf(f) : 0);
+    }
+    netShow("pick");
+  }
+  function paintNetList() {
+    var ul = $("net-list");
+    if (ul.children.length !== state.games.length) {
+      ul.innerHTML = "";
+      state.games.forEach(function (g) {
+        var li = document.createElement("li"), cn = coverName(g);
+        li.innerHTML = "<b></b><span></span>";
+        li.querySelector("b").textContent = cn ? cleanTitle(cn).title : g.title;
+        li.querySelector("span").textContent = [g.region, g.source === "usb" ? "Pen drive" : g.source === "pc" ? "PC" : "TV"].filter(Boolean).join(" · ");
+        ul.appendChild(li);
+      });
+    }
+    var lis = ul.children;
+    for (var i = 0; i < lis.length; i++) lis[i].classList.toggle("focused", i === state.netIdx);
+    var el = lis[state.netIdx], box = ul.parentNode;
+    if (el) {
+      if (el.offsetTop < box.scrollTop) box.scrollTop = el.offsetTop;
+      else if (el.offsetTop + el.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = el.offsetTop + el.offsetHeight - box.clientHeight;
+    }
+  }
+  function netPickMove(d) {
+    var n = state.games.length;
+    state.netIdx = (state.netIdx + d + n) % n;
+    paintNetList();
   }
 
-  function netHost(g) {
+  // convidar no meio do jogo (o jogo continua de onde está)
+  function netInvite() {
+    var g = state.current;
+    if (LITE && LITE.net) { toast("Você já está numa partida online", 2500); return; }
+    if (!LITE) {
+      // o jogo online usa o emulador TV antiga: reabre nele e já cria a partida
+      try { localStorage.setItem("snestv.autoinvite", gameKey(g)); } catch (e) {}
+      exitGame("Abrindo no emulador TV antiga para jogar online…");
+      return;
+    }
+    $("menu").hidden = true;
+    netHost(g, true);
+  }
+
+  function netHost(g, live) {
     state.netPick = false;
     $("net-banner").hidden = true;
     netShow("host");
+    $("net-host-back").textContent = live ? "cancelar e voltar ao jogo" : "cancelar";
     $("net-code-big").textContent = "······";
     $("net-game").textContent = g.title;
     netStatus("Preparando…");
     var code = newCode();
-    NET = { role: "host", code: code, game: g };
+    NET = { role: "host", code: code, game: g, live: !!live };
     netLibs().then(function () { return bytesOf(g); }).then(function (data) {
       NET.hash = fnv(romOf(data));
       var P = window.Peer || window.peerjs.Peer;
@@ -2487,7 +2565,7 @@
         netStatus("Passe o código para o seu amigo. Aguardando a outra TV…");
       });
       peer.on("error", function (e) {
-        if (e.type === "unavailable-id") { netEnd(); netHost(g); return; }
+        if (e.type === "unavailable-id") { netEnd(); netHost(g, live); return; }
         netStatus("Sem conexão com a internet (" + e.type + ")", "err");
       });
       peer.on("connection", function (conn) {
@@ -2597,6 +2675,13 @@
   function netBegin() {
     // atraso: metade da ida-e-volta em quadros + folga
     NET.delay = Math.max(3, Math.min(10, Math.ceil(NET.rtt / 2 / 16.7) + 2));
+    if (NET.live && LITE) {
+      // convite no meio do jogo: manda o momento atual do jogo para a outra TV
+      state.net = { role: "host" };
+      if (state.multitap) { LITE.setMultitap(false); state.multitap = false; }
+      netOnLiteReady();
+      return;
+    }
     startGame(NET.game, { role: "host" });
   }
   function netOnLiteReady() {

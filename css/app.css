@@ -466,3 +466,11 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 .fbtn.main { background: #5b4bd6; border-color: #5b4bd6; }
 .fbtn:focus { border-color: #fff; box-shadow: 0 0 0 0.3rem rgba(185,173,255,0.45); -webkit-transform: scale(1.06); transform: scale(1.06); }
 .fbtn[hidden] { display: none; }
+
+/* lista de jogos para criar a partida online */
+.net-list-box { max-height: 26rem; overflow: hidden; margin: 1rem 0; border-radius: 0.8rem; background: rgba(255,255,255,0.03); }
+.net-list { list-style: none; margin: 0; padding: 0.4rem; }
+.net-list li { display: -webkit-flex; display: flex; -webkit-justify-content: space-between; justify-content: space-between; -webkit-align-items: center; align-items: center; padding: 0.75rem 1.1rem; border-radius: 0.6rem; border: 2px solid transparent; }
+.net-list li b { font-size: 1.15rem; color: #ece9f2; }
+.net-list li span { font-size: 0.85rem; color: #9a94a8; margin-left: 1rem; }
+.net-list li.focused { background: rgba(91,75,214,0.35); border-color: #b9adff; }

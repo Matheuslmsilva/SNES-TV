@@ -118,6 +118,7 @@
       <li data-act="fps">Mostrar FPS: <b id="fps-state">não</b></li>
       <li data-act="restart">Reiniciar o jogo</li>
       <li data-act="ach">Conquistas</li>
+      <li data-act="invite">Convidar amigo para jogar online</li>
       <li data-act="pair">Celular como controle</li>
       <li data-act="controls">Ver controles</li>
       <li data-act="exit">Sair para a lista de jogos</li>
@@ -269,12 +270,17 @@
       </div>
       <p class="muted small center"><kbd>◀ ▶</kbd> escolher · <kbd>OK</kbd> confirmar · <kbd>VOLTAR</kbd> fechar</p>
     </div>
+    <div id="net-pick" hidden>
+      <p class="muted">Escolha o jogo da partida (a outra TV precisa ter o mesmo arquivo):</p>
+      <div class="net-list-box"><ul id="net-list" class="net-list"></ul></div>
+      <p class="muted small center"><kbd>▲ ▼</kbd> escolher · <kbd>OK</kbd> criar partida · <kbd>VOLTAR</kbd> voltar</p>
+    </div>
     <div id="net-host" hidden>
       <p class="muted">Jogo da partida: <b id="net-game"></b></p>
       <p>Na outra TV, abra <b>Jogar online → Entrar com código</b> e digite:</p>
       <div class="net-code-big" id="net-code-big">······</div>
       <p id="net-st-host" class="phone-status center">Preparando…</p>
-      <p class="muted small center">Você será o <b>Jogador 1</b> · <kbd>VOLTAR</kbd> cancelar</p>
+      <p class="muted small center">Você será o <b>Jogador 1</b> · <kbd>VOLTAR</kbd> <span id="net-host-back">cancelar</span></p>
     </div>
     <div id="net-join" hidden>
       <p>Digite o código que aparece na outra TV:</p>
