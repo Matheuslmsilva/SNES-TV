@@ -630,6 +630,7 @@
         fitPlayer();
         startFps();
         Conquistas.detect(null);
+        buildSideHelp(g, null);
         Conquistas.gameStarted(gameKey(g));
         startAchTimer();
       };
@@ -677,6 +678,7 @@
       startFps();
       Conquistas.detect(LITE.rom);
       learnCover(g, LITE.rom);
+      buildSideHelp(g, LITE.rom);
       Conquistas.gameStarted(gameKey(g));
       startAchTimer();
       if (net) { netOnLiteReady(); return; }
@@ -734,6 +736,7 @@
     el.hidden = !crt;
     $("game").classList.toggle("crt-on", crt);
     if (crt) buildCrt(el, vw, vh, gx, gy, Math.round(gw), Math.round(gh));
+    placeSides(gx, Math.round(gw), vw);
   }
 
   function roundRectPath(c, x, y, w, h, r) {
@@ -886,6 +889,7 @@
     $("engine-state").textContent = ENGINE_NAMES[LITE ? "lite" : "ejs"];
     $("fps-state").textContent = showFps() ? "sim" : "não";
     $("crt-state").textContent = crtOn() ? "ligado" : "desligado";
+    $("side-state").textContent = sideOn() ? "sim" : "não";
     $("menu").hidden = false;
     paintMenu();
   }
@@ -948,6 +952,12 @@
       try { localStorage.setItem("snestv.autostart", gameKey(state.current)); } catch (e) {}
       $("perf-state").textContent = PERF_NAMES[next];
       return exitGame("Reabrindo em " + PERF_NAMES[next] + "…");
+    }
+    if (act === "side") {
+      try { localStorage.setItem("snestv.side", sideOn() ? "0" : "1"); } catch (e) {}
+      $("side-state").textContent = sideOn() ? "sim" : "não";
+      fitPlayer();
+      return;
     }
     if (act === "crt") {
       try { localStorage.setItem("snestv.crt", crtOn() ? "0" : "1"); } catch (e) {}
@@ -2380,6 +2390,106 @@
       toast(who + " saiu da partida", 4000);
       setTimeout(function () { exitGame("Partida encerrada…"); }, 1500);
     } else netStatus("A outra TV desconectou", "err");
+  }
+
+  // ====================================================================
+  // Dicas de botões nas faixas pretas laterais (para quem está começando)
+  // ====================================================================
+  var GAME_HELP = {
+    smw: { name: "Super Mario World", rows: [
+      ["B", "Pular"], ["A", "Pulo giratório (quebra blocos)"], ["Y", "Correr · pegar casco · bola de fogo"],
+      ["X", "Correr (igual ao Y)"], ["dpad", "Andar · ▼ abaixar · ▲ entrar em canos"], ["L", "Mover a tela"], ["R", "Mover a tela"],
+      ["Start", "Pausar"], ["Select", "Usar o item guardado"] ] },
+    alttp: { name: "Zelda: A Link to the Past", rows: [
+      ["B", "Espada (segure para girar)"], ["A", "Agir: falar, ler, pegar, correr com as botas"], ["Y", "Usar o item escolhido"],
+      ["X", "Mapa"], ["dpad", "Andar"], ["Start", "Menu de itens"], ["Select", "Salvar e sair"] ] },
+    sm: { name: "Super Metroid", rows: [
+      ["X", "Atirar"], ["A", "Pular"], ["B", "Correr"], ["Y", "Guardar a arma especial"],
+      ["Select", "Trocar arma (míssil, super míssil...)"], ["L", "Mirar para baixo (diagonal)"], ["R", "Mirar para cima (diagonal)"],
+      ["dpad", "Andar · ▼▼ virar bola"], ["Start", "Pausar e ver o mapa"] ] },
+    smk: { name: "Super Mario Kart", rows: [
+      ["B", "Acelerar"], ["Y", "Frear / ré"], ["A", "Usar o item"], ["L", "Pular / derrapar na curva"], ["R", "Pular / derrapar na curva"],
+      ["X", "Olhar para trás"], ["dpad", "Virar"], ["Start", "Pausar"] ] },
+    dkc: { name: "Donkey Kong Country", rows: [
+      ["B", "Pular"], ["Y", "Correr · rolar · pegar barril"], ["Select", "Trocar de Kong"], ["dpad", "Andar · ▼ pegar · ▲ subir"], ["Start", "Pausar"] ] },
+    sf2: { name: "Street Fighter II", rows: [
+      ["Y", "Soco fraco"], ["X", "Soco médio"], ["L", "Soco forte"], ["B", "Chute fraco"], ["A", "Chute médio"], ["R", "Chute forte"],
+      ["dpad", "Andar · ▲ pular · ▼ abaixar · ◀ (para trás) defender"], ["Start", "Pausar"] ] }
+  };
+  var GENERIC_HELP = { name: "Controle do Super Nintendo", rows: [
+    ["dpad", "Direcional"], ["B", "Botão B (normalmente pular/confirmar)"], ["A", "Botão A"], ["Y", "Botão Y"], ["X", "Botão X"],
+    ["L", "Botão L (ombro esquerdo)"], ["R", "Botão R (ombro direito)"], ["Start", "Começar / pausar"], ["Select", "Select"] ] };
+
+  function helpKeyFor(g, rom) {
+    var names = [];
+    if (g) { var cn = coverName(g); if (cn) names.push(cn); names.push(g.title, g.name); }
+    if (rom) names.push(headerTitle(rom));
+    for (var i = 0; i < names.length; i++) {
+      var k = normTitle(names[i]);
+      if (!k) continue;
+      var c4 = Conquistas.gameFor(names[i]);
+      if (c4) return c4;
+      if (k.indexOf("donkeykongcountry") === 0 && !/[23]/.test(k.charAt(17) || "")) return "dkc";
+      if (k.indexOf("streetfighterii") === 0 || k.indexOf("superstreetfighterii") === 0) return "sf2";
+    }
+    return null;
+  }
+
+  function sideOn() { try { return localStorage.getItem("snestv.side") !== "0"; } catch (e) { return true; } }
+
+  function btnChip(b) {
+    var cls = { A: "c-a", B: "c-b", X: "c-x", Y: "c-y" }[b];
+    if (cls) return '<i class="chip round ' + cls + '">' + b + "</i>";
+    if (b === "dpad") return '<i class="chip dpad">✚</i>';
+    return '<i class="chip pill">' + b + "</i>";
+  }
+
+  var REMOTE_ROWS = [
+    ["OK ou amarelo", "B"], ["Vermelho", "A"], ["Verde", "Y"], ["Azul", "X"],
+    ["1 ou CH ▼", "L"], ["3 ou CH ▲", "R"], ["5 ou ▶❚❚", "Start"], ["0", "Select"], ["Setas", "Direcional"], ["VOLTAR", "Menu do jogo"]
+  ];
+  var PC_ROWS = [
+    ["Z", "B"], ["X", "A"], ["A", "Y"], ["S", "X"], ["Q", "L"], ["W", "R"], ["Enter", "Start"], ["Shift", "Select"], ["Setas", "Direcional"], ["Esc", "Menu do jogo"]
+  ];
+
+  function buildSideHelp(g, rom) {
+    var key = helpKeyFor(g, rom), h = key && GAME_HELP[key] ? GAME_HELP[key] : GENERIC_HELP;
+    var L = $("side-left"), R = $("side-right");
+    var html = '<div class="side-h">Botões</div><div class="side-game"></div><ul class="side-list">';
+    h.rows.forEach(function () { html += "<li><span></span><em></em></li>"; });
+    html += "</ul>";
+    L.innerHTML = html;
+    L.querySelector(".side-game").textContent = key ? h.name : "Este jogo";
+    var lis = L.querySelectorAll("li");
+    h.rows.forEach(function (r, i) {
+      lis[i].querySelector("span").innerHTML = btnChip(r[0]);
+      lis[i].querySelector("em").textContent = r[1];
+    });
+
+    var rows = TV_LIKE ? REMOTE_ROWS : PC_ROWS;
+    var html2 = '<div class="side-h">' + (TV_LIKE ? "No controle da TV" : "No teclado") + '</div><ul class="side-list remote">';
+    rows.forEach(function () { html2 += "<li><b></b><span></span></li>"; });
+    html2 += '</ul><div class="side-note">Joystick: os botões ficam na mesma posição do controle do SNES. Select + Start = menu.</div>';
+    R.innerHTML = html2;
+    var lis2 = R.querySelectorAll("li");
+    rows.forEach(function (r, i) {
+      lis2[i].querySelector("b").textContent = r[0];
+      lis2[i].querySelector("span").innerHTML = r[1].length <= 6 && r[1] !== "Menu" ? btnChip(r[1] === "Direcional" ? "dpad" : r[1]) : "";
+      if (r[1] === "Direcional" || r[1] === "Menu do jogo") lis2[i].querySelector("span").innerHTML += "<small>" + r[1] + "</small>";
+    });
+    fitPlayer();
+  }
+
+  // posiciona as faixas laterais ao lado da área do jogo
+  function placeSides(gx, gw, vw) {
+    var L = $("side-left"), R = $("side-right");
+    if (!L) return;
+    var side = gx - 24, show = sideOn() && side >= 170 && state.view !== "launcher";
+    L.hidden = R.hidden = !show;
+    if (!show) return;
+    L.style.width = R.style.width = side - 16 + "px";
+    L.style.left = "16px";
+    R.style.left = (gx + gw + 24) + "px";
   }
 
   // ====================================================================
