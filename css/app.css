@@ -363,3 +363,9 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
   padding: 0.45rem 0.8rem; border-radius: 0.4rem; background: rgba(0,0,0,0.6); color: #8fe3a5; }
 .net-wait { position: absolute; left: 50%; bottom: 3rem; z-index: 6; -webkit-transform: translateX(-50%); transform: translateX(-50%);
   padding: 0.8rem 1.6rem; border-radius: 0.8rem; background: rgba(20,18,25,0.9); color: #ffd36b; font-size: 1.2rem; font-weight: 700; }
+
+/* ---------- Excluir jogo ---------- */
+.det-del { margin-top: 1rem; color: #9a94a8; font-size: 0.95rem; }
+.panel.del-panel { width: 72rem; max-width: 94vw; text-align: center; }
+.del-btns .net-btn { width: 20rem; }
+.net-btn.danger.focused { background: #b8343a; border-color: #ff9b9b; }

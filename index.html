@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SNES TV</title>
+<meta name="application-name" content="SNES TV">
+<meta name="theme-color" content="#141219">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -59,6 +65,7 @@
         </div>
       </div>
       <div id="det-desc" class="det-desc"></div>
+      <div id="det-del" class="det-del" hidden><kbd class="key-dot c-b"></kbd> Excluir jogo</div>
       <div id="det-ach-box">
         <div class="det-ach-head"><b id="det-ach-title">Conquistas</b><span id="det-ach-count"></span></div>
         <div class="det-bar"><i id="det-bar"></i></div>
@@ -72,6 +79,7 @@
     <span><kbd>OK</kbd> Jogar</span>
     <span><kbd class="key-dot c-a"></kbd> Atualizar lista</span>
     <span><kbd class="key-dot c-y"></kbd> Configurar joystick</span>
+    <span><kbd class="key-dot c-b"></kbd> Excluir</span>
     <span><kbd class="key-dot c-x"></kbd> Controles</span>
     <span><kbd>VOLTAR</kbd> Sair</span>
   </footer>
@@ -134,7 +142,7 @@
           <tr><td><kbd>0</kbd></td><td>Select</td></tr>
           <tr><td><kbd>▶▶</kbd> (segurar)</td><td>Turbo</td></tr>
           <tr><td><kbd>VOLTAR</kbd></td><td>Menu / pausa</td></tr>
-          <tr><td><kbd class="key-dot c-b"></kbd> amarelo 2× na lista</td><td>Remover jogo salvo</td></tr>
+          <tr><td><kbd class="key-dot c-b"></kbd> amarelo na lista</td><td>Excluir jogo</td></tr>
         </table>
       </div>
       <div>
@@ -268,6 +276,21 @@
   </div>
 </div>
 <div id="net-banner" class="net-banner" hidden>Jogar online: escolha o jogo da partida e aperte <b>OK</b> · <b>VOLTAR</b> cancela</div>
+
+<!-- ============ EXCLUIR JOGO ============ -->
+<div id="del" class="overlay" hidden>
+  <div class="panel del-panel">
+    <h2>Excluir jogo?</h2>
+    <p><b id="del-title"></b></p>
+    <p id="del-text" class="muted"></p>
+    <div class="net-btns del-btns">
+      <div class="net-btn" data-act="cancel"><b>Cancelar</b><span>Manter o jogo</span></div>
+      <div class="net-btn" data-act="game"><b>Excluir jogo</b><span>Os saves continuam guardados</span></div>
+      <div class="net-btn danger" data-act="all"><b>Excluir jogo e saves</b><span>Apaga também o progresso</span></div>
+    </div>
+    <p class="muted small center"><kbd>◀ ▶</kbd> escolher · <kbd>OK</kbd> confirmar · <kbd>VOLTAR</kbd> cancelar</p>
+  </div>
+</div>
 
 <!-- ============ NOME ============ -->
 <div id="name-box" class="overlay name-overlay" hidden>

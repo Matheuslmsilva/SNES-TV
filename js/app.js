@@ -493,18 +493,64 @@
     });
   });
 
-  var removeArmed = null;
+  // ---------------- excluir jogo ----------------
+  function canDelete(g) { return g && !g.action && (g.source === "local" || (g.source === "usb" && g.tfile)); }
   function removeFocused() {
     var g = state.items && state.items[state.focus];
-    if (!g || g.source !== "local") return;
-    if (removeArmed !== g.name) {
-      removeArmed = g.name;
-      toast("Aperte AMARELO de novo para remover \"" + g.title + "\" desta TV", 3000);
-      setTimeout(function () { removeArmed = null; }, 3000);
-      return;
-    }
-    removeArmed = null;
-    romsDel(g.name).then(function () { toast("Jogo removido", 1600); refresh(true); });
+    if (!g || g.action) return;
+    if (g.source === "pc") { toast("Este jogo está na pasta do PC — para tirar, apague o arquivo lá", 3500); return; }
+    if (!canDelete(g)) return;
+    state.delGame = g;
+    state.delBtn = 0;
+    state.view = "del";
+    var cn = coverName(g);
+    $("del-title").textContent = cn ? cleanTitle(cn).title : g.title;
+    $("del-text").textContent = g.source === "usb" ? "O arquivo será apagado do pen drive." : "O jogo será apagado desta TV.";
+    $("del").hidden = false;
+    paintDel();
+  }
+  function paintDel() {
+    var b = $("del").querySelectorAll(".net-btn");
+    for (var i = 0; i < b.length; i++) b[i].classList.toggle("focused", i === state.delBtn);
+  }
+  function closeDel() { $("del").hidden = true; state.view = "launcher"; padPrev = {}; }
+  function dbDel(key) {
+    return db().then(function (d) {
+      return new Promise(function (res) {
+        var tx = d.transaction("states", "readwrite");
+        tx.objectStore("states").delete(key);
+        tx.oncomplete = res; tx.onerror = res;
+      });
+    }).catch(function () {});
+  }
+  function deleteUsbFile(g) {
+    return new Promise(function (resolve, reject) {
+      try {
+        var full = g.tfile.fullPath || g.path, dirPath = full.substring(0, full.lastIndexOf("/"));
+        tizen.filesystem.resolve(dirPath, function (dir) {
+          try { dir.deleteFile(full, resolve, reject); } catch (e) { reject(e); }
+        }, reject, "rw");
+      } catch (e) { reject(e); }
+    });
+  }
+  function confirmDel() {
+    var act = $("del").querySelectorAll(".net-btn")[state.delBtn].getAttribute("data-act");
+    var g = state.delGame;
+    closeDel();
+    if (act === "cancel" || !g) return;
+    var key = gameKey(g);
+    var job = g.source === "usb" ? deleteUsbFile(g) : romsDel(g.name);
+    job.then(function () {
+      if (act === "all") {
+        ["sram2005:", "state2005:", "state:"].forEach(function (p) { dbDel(p + key); });
+      }
+      try { localStorage.removeItem("snestv.cover." + key); if (store("snestv.last") === key) localStorage.removeItem("snestv.last"); } catch (e) {}
+      toast(act === "all" ? "Jogo e saves excluídos" : "Jogo excluído", 2000);
+      state.focus = Math.max(0, state.focus - 1);
+      refresh(true);
+    }, function () {
+      toast("Não foi possível apagar o arquivo do pen drive (ele pode estar protegido contra gravação)", 4000);
+    });
   }
 
   // ====================================================================
@@ -1007,6 +1053,11 @@
       if (c === K.ENTER || isBack(c)) closeHelp();
     } else if (state.view === "phone") {
       if (isBack(c) || c === K.ENTER) closePhone();
+    } else if (state.view === "del") {
+      if (c === K.LEFT) { state.delBtn = Math.max(0, state.delBtn - 1); paintDel(); }
+      else if (c === K.RIGHT) { state.delBtn = Math.min(2, state.delBtn + 1); paintDel(); }
+      else if (c === K.ENTER) confirmDel();
+      else if (isBack(c)) closeDel();
     } else if (state.view === "net") {
       if (state.netMode === "home") {
         if (c === K.LEFT || c === K.RIGHT) { state.netBtn = state.netBtn ? 0 : 1; paintNetBtns(); }
@@ -1185,6 +1236,7 @@
           if (ok) activate();
           if (hit(BTN.X)) openHelp("launcher");
           if (hit(BTN.SELECT)) openWizard();
+          if (hit(BTN.Y)) removeFocused();
         } else if (state.view === "game") {
           if ((any[BTN.SELECT] && any[BTN.START]) || hit("menu")) { openMenu(); }
           else {
@@ -1226,6 +1278,11 @@
           if (back || hit(BTN.B) || hit(BTN.A)) closePhone();
         } else if (state.view === "pair") {
           if (back) closePair();
+        } else if (state.view === "del") {
+          if (left) { state.delBtn = Math.max(0, state.delBtn - 1); paintDel(); }
+          if (right) { state.delBtn = Math.min(2, state.delBtn + 1); paintDel(); }
+          if (hit(BTN.B) || hit(BTN.A)) confirmDel();
+          if (back) closeDel();
         } else if (state.view === "ach") {
           if (back || ok) closeAch();
           if (down) scrollAch(1);
@@ -1917,6 +1974,7 @@
     }
     $("det-meta").textContent = meta.join(" · ");
     $("det-desc").textContent = g.action ? (ACTION_INFO[g.action] || "") : "";
+    $("det-del").hidden = !canDelete(g);
     $("det-desc").hidden = !g.action;
 
     // conquistas
