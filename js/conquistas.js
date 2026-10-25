@@ -16,6 +16,29 @@
     smk:   { name: "Super Mario Kart", match: /SUPER\s*MARIO\s*KART/ }
   };
 
+  // nomes normalizados (sem espaços/acentos) de cada jogo — arquivo, capa ou cartucho
+  var KEYS = {
+    smw: ["supermarioworld"],
+    alttp: ["legendofzeldaalinktothepast", "legendofzeldalinktothepast", "alinktothepast", "linktothepast", "legendofzelda", "zeldanodensetsukamigamitotriforce", "zeldanodensetsu"],
+    sm: ["supermetroid"],
+    smk: ["supermariokart"]
+  };
+  function norm(t) {
+    t = String(t || "").replace(/\s*[\(\[][^\)\]]*[\)\]]/g, "").toLowerCase().replace(/&/g, " and ").replace(/_/g, " ");
+    var m = t.match(/^(.*), (the|a|an)( - .*)?$/);
+    if (m) t = m[1] + (m[3] || "");
+    t = t.replace(/^(the|a|an) /, "");
+    return t.replace(/[^a-z0-9]/g, "");
+  }
+  function gameFor() {
+    for (var a = 0; a < arguments.length; a++) {
+      var k = norm(arguments[a]);
+      if (!k) continue;
+      for (var g in KEYS) if (KEYS[g].indexOf(k) >= 0) return g;
+    }
+    return null;
+  }
+
   // ---------- portões: só conta quando o jogo está de fato sendo jogado ----------
   var GATES = {
     // $7E0100 = modo do jogo (0x0E mapa, 0x14 dentro da fase). A demonstração da tela de título usa 0x07.
@@ -116,6 +139,8 @@
     lastInput: 0,
     hits: {},
 
+    gameFor: gameFor,
+    listFor: function (g) { return DEFS.filter(function (d) { return d.g === g; }); },
     isUnlocked: function (id) { return !!unlocked[id]; },
     count: function () { return Object.keys(unlocked).filter(function (k) { return C.byId(k); }).length; },
     total: function () { return DEFS.length; },
@@ -142,7 +167,8 @@
         for (var i = 0; i < 21; i++) { var c = rom[o + i]; title += c >= 32 && c < 127 ? String.fromCharCode(c) : " "; }
         if (((comp ^ sum) & 0xFFFF) === 0xFFFF || !best) best = title.toUpperCase();
       });
-      Object.keys(GAMES).forEach(function (k) { if (GAMES[k].match.test(best)) C.game = k; });
+      C.game = gameFor(best);
+      if (!C.game) Object.keys(GAMES).forEach(function (k) { if (GAMES[k].match.test(best) && !/\b2\b|YOSHI/.test(best)) C.game = k; });
       return C.game;
     },
 

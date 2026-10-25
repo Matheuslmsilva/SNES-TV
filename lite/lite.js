@@ -229,7 +229,8 @@
   LiteSNES.prototype.getState = function () {
     var M = this.M, size = M._s_state_size(), p = M._malloc(size);
     var ok = M._s_state_save(p, size);
-    var out = ok ? new Uint8Array(M.HEAPU8.buffer, p, size).slice() : null;
+    var out = null;
+    if (ok) { out = new Uint8Array(size); out.set(new Uint8Array(M.HEAPU8.buffer, p, size)); }
     M._free(p);
     if (!out) throw new Error("falha ao salvar estado");
     return out;

@@ -11,7 +11,7 @@
 
   var ROM_EXT = /\.(sfc|smc|swc|fig|zip|7z)$/i;
   var IS_TIZEN = typeof window.tizen !== "undefined" && !!window.tizen.filesystem;
-  var COLS = 6;
+  var COLS = 4;
 
   // Teclas do controle remoto Samsung
   var K = {
@@ -62,6 +62,11 @@
     t.textContent = msg; t.hidden = false;
     clearTimeout(toast._t);
     toast._t = setTimeout(function () { t.hidden = true; }, ms || 2600);
+  }
+
+  function labelBg(h, action) {
+    if (action) return "repeating-linear-gradient(135deg, #3b3550 0, #3b3550 0.8rem, #332e45 0.8rem, #332e45 1.6rem)";
+    return "linear-gradient(160deg, hsl(" + h + ",55%,46%), hsl(" + ((h + 40) % 360) + ",60%,28%))";
   }
 
   function hashHue(str) {
@@ -287,9 +292,10 @@
   // Fonte 2: servidor no PC (servidor.py)
   // ====================================================================
   function scanServer() {
-    return fetch("roms/list.json", { cache: "no-store" }).then(function (r) {
-      if (!r.ok) throw new Error("sem servidor");
-      return r.json();
+    return snesGet("roms/list.json?" + Date.now()).then(function (txt) {
+      var list = JSON.parse(txt);
+      if (!list || !list.map) throw new Error("sem servidor");
+      return list;
     }).then(function (list) {
       return list.map(function (it) {
         return { name: it.name, size: it.size, source: "pc", url: "roms/" + it.path.split("/").map(encodeURIComponent).join("/") };
@@ -342,6 +348,7 @@
   }
 
   function renderGrid() {
+    detKey = null;
     var grid = $("grid");
     grid.innerHTML = "";
     var items = state.games.slice();
@@ -364,7 +371,7 @@
       var meta = g.action ? g.meta :
         [g.region, fmtSize(g.size), g.source === "usb" ? "USB" : g.source === "pc" ? "PC" : g.source === "local" ? "salvo" : ""].filter(Boolean).join(" · ");
       el.innerHTML =
-        '<div class="cart"><div class="shell"><div class="cart-label" style="--hue:' + hue + '"><span></span></div></div></div>' +
+        '<div class="cart"><div class="shell"><div class="cart-label" style="background:' + labelBg(hue, g.action) + '"><span></span></div></div></div>' +
         '<div class="title"></div><div class="meta"></div>';
       el.querySelector(".cart-label span").textContent = initial;
       if (!g.action) putCover(el.querySelector(".cart-label"), coverUrl(g));
@@ -388,6 +395,7 @@
   }
 
   function setFocus() {
+    showDetails(state.items && state.items[state.focus]);
     var tiles = $("grid").children;
     for (var i = 0; i < tiles.length; i++) tiles[i].classList.toggle("focused", i === state.focus);
     var el = tiles[state.focus];
@@ -475,10 +483,7 @@
   function getRomBytes(g) {
     if (g.source === "local") return Promise.resolve(g.file || g.data);
     if (g.source === "pc") {
-      return fetch(g.url).then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.arrayBuffer();
-      });
+      return snesGet(g.url, "arraybuffer");
     }
     return readTizenFile(g);
   }
@@ -486,7 +491,7 @@
   function showLoading(g, text) {
     $("loading-initial").textContent = (g.title.match(/[A-Za-z0-9]/) || ["S"])[0].toUpperCase();
     var lab = $("loading-initial").parentNode;
-    lab.style.setProperty("--hue", hashHue(g.title));
+    lab.style.background = labelBg(hashHue(g.title));
     lab.classList.remove("has-cover");
     var old = lab.querySelector("img.cover"); if (old) old.parentNode.removeChild(old);
     if (g.title) putCover(lab, coverUrl(g));
@@ -570,7 +575,7 @@
     var key = "sram2005:" + gameKey(g);
     var bytes = (typeof Blob !== "undefined" && data instanceof Blob) ? readAsBuffer(data) : Promise.resolve(data);
     var libs = window.LiteSNES ? Promise.resolve() :
-      loadScript("lib/fflate.js").then(function () { return loadScript("lite/snes2005.js"); })
+      loadScript("lib/fflate.js").then(function () { return loadScript(window.SNES_HAS_WASM ? "lite/snes2005.js" : "lite/snes2005-asm.js"); })
         .then(function () { return loadScript("lite/lite.js"); });
     return libs.then(function () { return bytes; }).then(function (buf) {
       LITE = new LiteSNES({
@@ -746,6 +751,7 @@
   function engineName() {
     var v = null;
     try { v = localStorage.getItem("snestv.engine"); } catch (e) {}
+    if (!window.SNES_HAS_WASM) return "lite";     // TV nova (EmulatorJS) precisa de WebAssembly
     return v === "ejs" ? "ejs" : "lite";
   }
   var E = {
@@ -839,6 +845,7 @@
     }
     if (act === "restart") { E.restart(); closeMenu(); return; }
     if (act === "engine") {
+      if (!window.SNES_HAS_WASM) { toast("O emulador TV nova precisa de um navegador mais novo. Esta TV usa só o TV antiga.", 4000); return; }
       var ne = engineName() === "lite" ? "ejs" : "lite";
       try { localStorage.setItem("snestv.engine", ne); } catch (e) {}
       try { localStorage.setItem("snestv.autostart", gameKey(state.current)); } catch (e) {}
@@ -1773,6 +1780,91 @@
     if (!n) return;
     try { localStorage.setItem("snestv.cover." + gameKey(g), n); } catch (e) {}
     coverCache[gameKey(g)] = n;
+  }
+
+  // ====================================================================
+  // Painel do jogo (lado direito da lista)
+  // ====================================================================
+  var ACTION_INFO = {
+    phone: "Mande jogos do celular para a TV: leia o QR Code com a câmera, escolha os arquivos .sfc, .smc ou .zip e eles ficam salvos aqui.",
+    pair: "Transforme o celular num controle de Super Nintendo. Até 4 celulares, um para cada jogador. Eles se reconectam sozinhos.",
+    ach: "Todas as conquistas num lugar só: as gerais, que valem para qualquer jogo, e as de Super Mario World, Zelda, Super Metroid e Super Mario Kart.",
+    open: "Escolha arquivos .sfc, .smc ou .zip deste aparelho. Eles ficam salvos para a próxima vez."
+  };
+  var detKey = null;
+
+  function showDetails(g) {
+    if (!g) return;
+    var key = g.action ? "action:" + g.action : gameKey(g);
+    var lab = $("det-label");
+    var cn = g.action ? null : coverName(g);
+    var title = cn ? cleanTitle(cn).title : g.title;
+
+    if (detKey !== key) {
+      detKey = key;
+      var old = lab.querySelector("img.cover"); if (old) lab.removeChild(old);
+      lab.classList.remove("has-cover");
+      lab.style.background = labelBg(g.action ? 250 : hashHue(g.title), g.action);
+      $("det-initial").textContent = g.action ? ({ phone: "QR", pair: "PAD", ach: "★", open: "+" }[g.action] || "+") :
+        (g.title.match(/[A-Za-z0-9]/) || ["?"])[0].toUpperCase();
+      if (!g.action) putCover(lab, coverUrl(g));
+    }
+    $("det-title").textContent = title;
+
+    var meta = [];
+    if (!g.action) {
+      if (g.region) meta.push(g.region);
+      if (g.size) meta.push(fmtSize(g.size));
+      meta.push(g.source === "usb" ? "Pen drive" : g.source === "pc" ? "Pasta do PC" : "Salvo na TV");
+      if (g.last) meta.push("último jogado");
+    }
+    $("det-meta").textContent = meta.join(" · ");
+    $("det-desc").textContent = g.action ? (ACTION_INFO[g.action] || "") : "";
+    $("det-desc").hidden = !g.action;
+
+    // conquistas
+    var gk = g.action ? null : Conquistas.gameFor(cn, g.title, g.name);
+    var list, head;
+    if (g.action === "ach") { list = Conquistas.defs; head = "Todas as conquistas"; }
+    else if (gk) { list = Conquistas.listFor(gk); head = "Conquistas do jogo"; }
+    else if (!g.action) { list = Conquistas.listFor("gen"); head = "Conquistas gerais"; }
+    else list = null;
+
+    $("det-ach-box").hidden = !list;
+    var ul = $("det-ach");
+    ul.innerHTML = "";
+    if (!list) return;
+    var got = list.filter(function (d) { return Conquistas.isUnlocked(d.id); }).length;
+    $("det-ach-title").textContent = head;
+    $("det-ach-count").textContent = "★ " + got + "/" + list.length;
+    $("det-bar").style.width = Math.round(got / list.length * 100) + "%";
+    if (!gk && !g.action) {
+      var note = document.createElement("li");
+      note.className = "det-note";
+      note.textContent = "Este jogo ainda não tem conquistas próprias. As gerais valem para todos:";
+      ul.appendChild(note);
+    }
+    // desbloqueadas primeiro
+    list.slice().sort(function (a, b) { return (Conquistas.isUnlocked(b.id) ? 1 : 0) - (Conquistas.isUnlocked(a.id) ? 1 : 0); })
+      .forEach(function (d) {
+        var li = document.createElement("li"), on = Conquistas.isUnlocked(d.id);
+        if (on) li.className = "on";
+        li.innerHTML = "<i></i><b></b><span></span>";
+        li.querySelector("i").textContent = on ? "★" : "☆";
+        li.querySelector("b").textContent = d.t;
+        li.querySelector("span").textContent = d.d;
+        ul.appendChild(li);
+      });
+    // não coube tudo: mostra quantas faltam
+    var hidden = 0;
+    while (ul.children.length > 2 && ul.scrollHeight > ul.clientHeight + 2) { ul.removeChild(ul.lastChild); hidden++; }
+    if (hidden) {
+      ul.removeChild(ul.lastChild); hidden++;
+      var more = document.createElement("li");
+      more.className = "det-note";
+      more.textContent = "+ mais " + hidden + " — veja todas no cartucho Conquistas";
+      ul.appendChild(more);
+    }
   }
 
   // ====================================================================
