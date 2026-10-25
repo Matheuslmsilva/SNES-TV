@@ -367,7 +367,9 @@
         '<div class="cart"><div class="shell"><div class="cart-label" style="--hue:' + hue + '"><span></span></div></div></div>' +
         '<div class="title"></div><div class="meta"></div>';
       el.querySelector(".cart-label span").textContent = initial;
-      el.querySelector(".title").textContent = g.title;
+      if (!g.action) putCover(el.querySelector(".cart-label"), coverUrl(g));
+      var cn = g.action ? null : coverName(g);
+      el.querySelector(".title").textContent = cn ? cleanTitle(cn).title : g.title;
       el.querySelector(".meta").textContent = meta;
       if (g.last) {
         var b = document.createElement("span"); b.className = "badge"; b.textContent = "último";
@@ -483,7 +485,11 @@
 
   function showLoading(g, text) {
     $("loading-initial").textContent = (g.title.match(/[A-Za-z0-9]/) || ["S"])[0].toUpperCase();
-    $("loading-initial").parentNode.style.setProperty("--hue", hashHue(g.title));
+    var lab = $("loading-initial").parentNode;
+    lab.style.setProperty("--hue", hashHue(g.title));
+    lab.classList.remove("has-cover");
+    var old = lab.querySelector("img.cover"); if (old) old.parentNode.removeChild(old);
+    if (g.title) putCover(lab, coverUrl(g));
     $("loading-text").textContent = text;
     $("loading").hidden = false;
   }
@@ -581,6 +587,7 @@
       fitPlayer();
       startFps();
       Conquistas.detect(LITE.rom);
+      learnCover(g, LITE.rom);
       Conquistas.gameStarted(gameKey(g));
       startAchTimer();
       if (Conquistas.game) toast("★ Conquistas de " + Conquistas.games[Conquistas.game].name + " ativas", 2600);
@@ -1661,6 +1668,114 @@
   }
 
   // ====================================================================
+  // Capas dos jogos (coleção pública libretro-thumbnails)
+  // ====================================================================
+  var COVER_BASE = "https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Super_Nintendo_Entertainment_System/master/Named_Boxarts/";
+  var COVERS = null, COVER_KEYS = null, coverCache = {};
+
+  function loadCovers() {
+    return new Promise(function (resolve) {
+      try {
+        var x = new XMLHttpRequest();
+        x.open("GET", "covers.json", true);
+        x.onload = function () {
+          try { COVERS = JSON.parse(x.responseText); COVER_KEYS = Object.keys(COVERS); } catch (e) { COVERS = null; }
+          resolve();
+        };
+        x.onerror = function () { resolve(); };
+        x.send();
+      } catch (e) { resolve(); }
+    });
+  }
+
+  function normTitle(t) {
+    t = String(t || "").replace(/\s*[\(\[][^\)\]]*[\)\]]/g, "").toLowerCase().replace(/&/g, " and ").replace(/_/g, " ");
+    var m = t.match(/^(.*), (the|a|an)( - .*)?$/);
+    if (m) t = m[1] + (m[3] || "");
+    t = t.replace(/^(the|a|an) /, "");
+    return t.replace(/[^a-z0-9]/g, "");
+  }
+
+  function bigrams(s) { var o = {}; for (var i = 0; i < s.length - 1; i++) { var b = s.substr(i, 2); o[b] = (o[b] || 0) + 1; } return o; }
+  function dice(a, b) {
+    if (a.length < 2 || b.length < 2) return 0;
+    var A = bigrams(a), B = bigrams(b), inter = 0, na = a.length - 1, nb = b.length - 1;
+    for (var k in A) if (B[k]) inter += Math.min(A[k], B[k]);
+    return 2 * inter / (na + nb);
+  }
+
+  function findCover(title) {
+    if (!COVERS) return null;
+    var k = normTitle(title);
+    if (k.length < 3) return null;
+    if (COVERS[k]) return COVERS[k];
+    // começa igual (ex.: "legendofzelda" → "legendofzeldaalinktothepast"): pega o mais curto
+    var pref = null;
+    if (k.length >= 8) for (var i = 0; i < COVER_KEYS.length; i++) {
+      var c = COVER_KEYS[i];
+      if (c.indexOf(k) === 0 && (!pref || c.length < pref.length)) pref = c;
+    }
+    if (pref) return COVERS[pref];
+    // nome parecido (erros de digitação, abreviações)
+    var best = null, bs = 0;
+    for (var j = 0; j < COVER_KEYS.length; j++) {
+      var key = COVER_KEYS[j];
+      if (key.charAt(0) !== k.charAt(0) || Math.abs(key.length - k.length) > 12) continue;
+      var s = dice(k, key);
+      if (s > bs) { bs = s; best = key; }
+    }
+    return bs >= 0.8 ? COVERS[best] : null;
+  }
+
+  function headerTitle(u8) {
+    if (!u8 || !u8.length) return "";
+    var base = u8.length % 1024 === 512 ? 512 : 0, best = "";
+    [0x7FC0, 0xFFC0].forEach(function (off) {
+      var o = base + off;
+      if (o + 32 > u8.length) return;
+      var comp = u8[o + 0x1C] | (u8[o + 0x1D] << 8), sum = u8[o + 0x1E] | (u8[o + 0x1F] << 8), t = "";
+      for (var i = 0; i < 21; i++) { var ch = u8[o + i]; t += ch >= 32 && ch < 127 ? String.fromCharCode(ch) : " "; }
+      if (((comp ^ sum) & 0xFFFF) === 0xFFFF || !best) best = t.trim();
+    });
+    return best;
+  }
+
+  function coverName(g) {
+    var key = gameKey(g);
+    if (coverCache[key] !== undefined) return coverCache[key];
+    var saved = null;
+    try { saved = localStorage.getItem("snestv.cover." + key); } catch (e) {}
+    var name = saved || findCover(g.title || g.name);
+    if (!name && g.data) {            // jogo salvo na TV: tenta pelo nome gravado no cartucho
+      try { name = findCover(headerTitle(new Uint8Array(g.data))); } catch (e) {}
+    }
+    coverCache[key] = name || null;
+    return coverCache[key];
+  }
+
+  function coverUrl(g) { var n = coverName(g); return n ? COVER_BASE + encodeURIComponent(n) + ".png" : null; }
+
+  function putCover(label, url) {
+    if (!url || !label) return;
+    var img = new Image();
+    img.className = "cover";
+    img.alt = "";
+    img.onload = function () { label.classList.add("has-cover"); };
+    img.onerror = function () { if (img.parentNode) img.parentNode.removeChild(img); };
+    img.src = url;
+    label.appendChild(img);
+  }
+
+  // depois que o jogo abre, se a capa não foi achada pelo nome do arquivo, tenta pelo cartucho
+  function learnCover(g, rom) {
+    if (!COVERS || coverName(g)) return;
+    var n = findCover(headerTitle(rom));
+    if (!n) return;
+    try { localStorage.setItem("snestv.cover." + gameKey(g), n); } catch (e) {}
+    coverCache[gameKey(g)] = n;
+  }
+
+  // ====================================================================
   // Início
   // ====================================================================
   function init() {
@@ -1668,6 +1783,7 @@
     Conquistas.onUnlock = showAch;
     showDeviceInfo();
     if (ctrlEnabled()) startCtrl();
+    loadCovers().then(function () { if (state.view === "launcher" && state.items) renderGrid(); });
     refresh(true);
     requestAnimationFrame(pollPads);
 

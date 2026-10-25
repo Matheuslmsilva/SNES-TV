@@ -13,6 +13,8 @@ Emulador de Super Nintendo em WebAssembly com dois motores: **Snes9x 2005** (bas
 
 O envio usa conexão direta (WebRTC), com o servidor público gratuito do PeerJS só para combinar a conexão; os arquivos não ficam guardados em nenhum servidor.
 
+As capas vêm da coleção pública [libretro-thumbnails](https://github.com/libretro-thumbnails/Nintendo_-_Super_Nintendo_Entertainment_System) (carregadas direto de lá; `covers.json` é só o índice de nomes).
+
 Nenhum jogo vem incluído. Use apenas cópias que você tem o direito de usar.
 
 Licenças: Snes9x 2005 (licença não comercial do snes9x, ver `lite/LICENSE-snes9x2005.txt`), fflate (MIT), PeerJS (MIT), qrcode-generator (MIT), snes9x (licença não comercial), EmulatorJS (GPL-3.0, ver `emulator/LICENSE-EmulatorJS.txt`).

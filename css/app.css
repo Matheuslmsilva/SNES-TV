@@ -251,3 +251,8 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 #game.lite #player { width: 100%; height: 100%; }
 .lite-canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; background: #000; }
 #game.crt-on .lite-canvas { image-rendering: auto; }
+
+/* ---------- Capas ---------- */
+.cart-label img.cover { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.cart-label.has-cover span { visibility: hidden; }
+.cart-label { position: absolute; }
