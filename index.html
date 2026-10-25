@@ -312,6 +312,24 @@
   </div>
 </div>
 
+<!-- ============ RETROACHIEVEMENTS ============ -->
+<div id="ra-box" class="overlay name-overlay" hidden>
+  <div class="panel name-panel ra-panel">
+    <b class="ra-logo big">RA</b>
+    <h2>Conquistas da comunidade</h2>
+    <p class="muted">O <b>RetroAchievements</b> tem conquistas feitas por fãs para quase todos os jogos de SNES.
+      Crie uma conta grátis em <b>retroachievements.org</b> (pelo celular ou PC) e entre com ela aqui.</p>
+    <div id="ra-form">
+      <input id="ra-user" class="name-input" type="text" maxlength="40" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Usuário do RetroAchievements">
+      <input id="ra-pass" class="name-input" type="password" maxlength="64" autocomplete="off" placeholder="Senha">
+      <p class="muted small">A senha não fica guardada: a TV guarda só a chave de acesso que o site devolve.</p>
+    </div>
+    <div id="ra-logged" class="ra-logged" hidden>Conectado como <b id="ra-name"></b> · <span id="ra-score"></span></div>
+    <p id="ra-status" class="pair-status"></p>
+    <p class="muted small center" id="ra-keys"></p>
+  </div>
+</div>
+
 <!-- ============ CONQUISTAS ============ -->
 <div id="ach" class="overlay" hidden>
   <div class="panel ach-panel">
@@ -321,12 +339,12 @@
     </div>
     <div id="ach-list" class="ach-list"></div>
     <p class="muted small center"><kbd>▲ ▼</kbd> rolar · <kbd>VOLTAR</kbd> fechar ·
-      As conquistas de jogo funcionam no emulador TV antiga</p>
+      <kbd class="key-dot c-y"></kbd> RetroAchievements · As conquistas de jogo funcionam no emulador TV antiga</p>
   </div>
 </div>
 <div id="ach-toast" class="ach-toast" hidden>
-  <i class="ach-star">★</i>
-  <div><small>Conquista desbloqueada</small><b id="ach-toast-t"></b><span id="ach-toast-d"></span></div>
+  <i class="ach-star" id="ach-toast-star">★</i><img id="ach-toast-img" class="ach-img" alt="" hidden>
+  <div><small id="ach-toast-s">Conquista desbloqueada</small><b id="ach-toast-t"></b><span id="ach-toast-d"></span></div>
 </div>
 
 <div id="toast" class="toast" hidden></div>
@@ -335,6 +353,7 @@
 <script src="$WEBAPIS/webapis/webapis.js"></script>
 <script src="js/compat.js"></script>
 <script src="js/conquistas.js"></script>
+<script src="js/ra.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

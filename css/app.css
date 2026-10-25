@@ -404,3 +404,57 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 .side-list.remote li b.xb-y { color: #222; }
 .xb-a { color: #fff; background: #3e9a3a !important; } .xb-b { color: #fff; background: #c8352f !important; }
 .xb-x { color: #fff; background: #2f6fd0 !important; } .xb-y { color: #222; background: #e8b71f !important; }
+
+/* ---------- progresso de conquistas embaixo de cada cartucho ---------- */
+.tile-prog { position: relative; height: 1.25rem; margin: 0.45rem auto 0; width: 86%; border-radius: 0.7rem; overflow: hidden;
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1); }
+.tile-prog i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: rgba(232,183,31,0.42); border-radius: 0.7rem;
+  transition: width 0.6s ease; }
+.tile-prog span { position: relative; display: block; font-size: 0.72rem; line-height: 1.25rem; font-weight: 700; color: rgba(255,255,255,0.85); letter-spacing: 0.04em; }
+.tile-prog.none { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.05); }
+.tile-prog.none span { color: rgba(255,255,255,0.3); font-weight: 600; }
+.tile-prog.full i { background: rgba(232,183,31,0.7); }
+.tile-prog.full span { color: #fff; }
+.tile.focused .tile-prog { border-color: rgba(232,183,31,0.5); }
+
+/* ---------- jogadores e ping na faixa lateral ---------- */
+.side-players { margin-bottom: 1.4rem; padding-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.pl-main { margin-bottom: 0.5rem; }
+.pl-tag { display: inline-block; font-size: 1.15rem; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: #fff;
+  padding: 0.25rem 0.8rem; border-radius: 0.5rem; }
+.pl-tag.p1, .pl-dot.p1 { background: #d0453a; } .pl-tag.p2, .pl-dot.p2 { background: #3a63c8; }
+.pl-tag.p3, .pl-dot.p3 { background: #c99a12; } .pl-tag.p4, .pl-dot.p4 { background: #2f9a4e; }
+.pl-you { margin-left: 0.5rem; font-size: 0.8rem; font-weight: 800; color: #e8b71f; text-transform: uppercase; letter-spacing: 0.1em; }
+.pl-who { margin-top: 0.35rem; font-size: 0.95rem; color: #ece9f2; font-weight: 600; }
+.pl-row { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; margin-top: 0.35rem; font-size: 0.85rem; color: #9a94a8; }
+.pl-row .pl-who { margin: 0; font-size: 0.85rem; color: #9a94a8; }
+.pl-dot { -webkit-flex: none; flex: none; font-size: 0.72rem; font-weight: 900; color: #fff; padding: 0.1rem 0.4rem; border-radius: 0.35rem; margin-right: 0.5rem; }
+.pl-net { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; margin-top: 0.8rem; font-size: 0.85rem; }
+.pl-net b { color: #5fe08a; letter-spacing: 0.1em; margin-right: 0.6rem; font-size: 0.78rem; }
+.pl-ping { color: #ece9f2; font-weight: 700; }
+.pl-bars { display: -webkit-flex; display: flex; -webkit-align-items: flex-end; align-items: flex-end; height: 1rem; margin-right: 0.6rem; }
+.pl-bars i { display: block; width: 0.25rem; margin-right: 0.12rem; background: rgba(255,255,255,0.18); border-radius: 1px; }
+.pl-bars i:nth-child(1) { height: 25%; } .pl-bars i:nth-child(2) { height: 50%; }
+.pl-bars i:nth-child(3) { height: 75%; } .pl-bars i:nth-child(4) { height: 100%; }
+.pl-bars.good i { background: #5fe08a; }
+.pl-bars.ok i:nth-child(-n+3) { background: #e8b71f; }
+.pl-bars.bad i:nth-child(-n+2) { background: #ff6b5e; }
+
+/* ---------- RetroAchievements ---------- */
+.ra-logo { -webkit-flex: none; flex: none; display: inline-block; width: 2.6rem; height: 2.6rem; line-height: 2.6rem; text-align: center; border-radius: 0.6rem;
+  background: #1d4e89; color: #ffd34d; font-weight: 900; font-size: 1rem; letter-spacing: 0.02em; }
+.ra-logo.big { width: 4rem; height: 4rem; line-height: 4rem; font-size: 1.5rem; margin-bottom: 1rem; }
+.ra-card { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; background: rgba(29,78,137,0.28); border: 1px solid rgba(110,160,230,0.3); border-radius: 0.8rem;
+  padding: 0.8rem 1rem; margin-bottom: 0.6rem; }
+.ra-card > div { -webkit-flex: 1; flex: 1; display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; margin-left: 0.9rem; line-height: 1.35; }
+.ra-card .ra-h { font-size: 1.05rem; color: #fff; }
+.ra-card .ra-s { font-size: 0.85rem; color: #a9b8d0; }
+.ra-card .ra-k { -webkit-flex: none; flex: none; margin-left: 1rem; font-size: 0.85rem; color: #ece9f2; }
+.ach-group.ra-g { color: #8fb8ff; }
+.ach-item img { -webkit-flex: none; flex: none; width: 2.6rem; height: 2.6rem; border-radius: 0.35rem; margin-right: 0.8rem; background: rgba(255,255,255,0.05); }
+.ach-item.ra:not(.on) img { opacity: 0.55; }
+.det-ach li.pic img { -webkit-flex: none; flex: none; width: 1.9rem; height: 1.9rem; border-radius: 0.3rem; margin-right: 0.6rem; background: rgba(255,255,255,0.05); }
+.det-ach li.pic:not(.on) img { opacity: 0.5; }
+.ach-toast .ach-img { -webkit-flex: none; flex: none; width: 3.4rem; height: 3.4rem; border-radius: 0.5rem; margin-right: 1rem; }
+.ra-panel .name-input { display: block; margin: 0.7rem auto 0; }
+.ra-panel .ra-logged { font-size: 1.2rem; margin: 1.2rem 0 0.4rem; }

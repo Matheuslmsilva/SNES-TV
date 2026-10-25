@@ -410,6 +410,8 @@
       grid.appendChild(el);
     });
     state.items = items;
+    paintBars();
+    if (state.games.length) setTimeout(raScan, 1200);
     if (state.focus >= items.length || state.firstRender !== false) {
       state.focus = lastIdx >= 0 ? lastIdx : 0;
       state.firstRender = false;
@@ -681,6 +683,7 @@
       buildSideHelp(g, LITE.rom);
       Conquistas.gameStarted(gameKey(g));
       startAchTimer();
+      if (window.RA && RA.user()) RA.attach(LITE, LITE.rom, gameKey(g));
       if (net) { netOnLiteReady(); return; }
       if (Conquistas.game) toast("★ Conquistas de " + Conquistas.games[Conquistas.game].name + " ativas", 2600);
     }).catch(function (e) {
@@ -852,7 +855,7 @@
     pause: function () { if (LITE) LITE.pause(); else try { emu().pause(); } catch (e) {} },
     play: function () { if (LITE) LITE.play(); else try { emu().play(); } catch (e) {} },
     getState: function () { return LITE ? LITE.getState() : gm().getState(); },
-    loadState: function (d) { if (LITE) LITE.loadState(new Uint8Array(d)); else gm().loadState(d); },
+    loadState: function (d) { if (LITE) { LITE.loadState(new Uint8Array(d)); if (window.RA) RA.reset(); } else gm().loadState(d); },
     restart: function () { if (LITE) LITE.reset(); else try { gm().restart(); } catch (e) {} },
     turbo: function (on) { if (LITE) LITE.setTurbo(on); else try { gm().toggleFastForward(on ? 1 : 0); } catch (e) {} },
     saveSram: function () {
@@ -982,6 +985,7 @@
     $("menu").hidden = true;
     showLoading(state.current, typeof msg === "string" ? msg : "Salvando…");
     Conquistas.flush();
+    if (window.RA) RA.detach();
     Promise.resolve(E.saveSram()).catch(function () {}).then(function () {
       if (LITE) LITE.stop();
       setTimeout(function () { location.reload(); }, 300);
@@ -1023,6 +1027,19 @@
       // 65376 = "Concluído" do teclado da Samsung
       if (c === K.ENTER || c === 65376) { e.preventDefault(); saveName(); }
       else if ((c === K.BACK || c === K.ESC || c === 65385) && userName()) { e.preventDefault(); closeName(); }
+      return;                    // as outras teclas vão para o campo de texto
+    }
+
+    if (state.view === "ra") {
+      var inField = document.activeElement && document.activeElement.tagName === "INPUT";
+      if (c === K.ENTER || c === 65376) {
+        e.preventDefault();
+        if (RA.user()) return;
+        if (document.activeElement === $("ra-user")) $("ra-pass").focus(); else raSubmit();
+      } else if (c === K.BACK || c === K.ESC || c === 65385 || (!inField && c === K.BACKSPACE)) { e.preventDefault(); closeRa(); }
+      else if (c === K.DOWN && !RA.user()) { e.preventDefault(); $("ra-pass").focus(); }
+      else if (c === K.UP && !RA.user()) { e.preventDefault(); $("ra-user").focus(); }
+      else if ((c === K.RED || (!inField && c === 82)) && RA.user()) { e.preventDefault(); raLogout(); }
       return;                    // as outras teclas vão para o campo de texto
     }
 
@@ -1077,7 +1094,8 @@
         else if (isBack(c)) closeNet();
       } else if (isBack(c)) closeNet();
     } else if (state.view === "ach") {
-      if (isBack(c) || c === K.ENTER) closeAch();
+      if (c === K.GREEN || c === 71 /* G */) openRa("ach");
+      else if (isBack(c) || c === K.ENTER) closeAch();
       else if (c === K.DOWN) scrollAch(1);
       else if (c === K.UP) scrollAch(-1);
     } else if (state.view === "pair") {
@@ -1224,6 +1242,7 @@
     if (changed || state.padBadgeDirty) {
       updatePadBadge(pads); state.padBadgeDirty = false;
       if (changed && state.view === "game" && state.current) buildSideHelp(state.current, LITE ? LITE.rom : null);
+      else if (state.view === "game" || state.view === "menu") paintPlayers();
     }
   }
 
@@ -1334,8 +1353,12 @@
           if (right) { state.delBtn = Math.min(2, state.delBtn + 1); paintDel(); }
           if (hit(BTN.B) || hit(BTN.A)) confirmDel();
           if (back) closeDel();
+        } else if (state.view === "ra") {
+          if (back) closeRa();
+          if (hit(BTN.X) && RA.user()) raLogout();
         } else if (state.view === "ach") {
-          if (back || ok) closeAch();
+          if (hit(BTN.X)) openRa("ach");
+          else if (back || ok) closeAch();
           if (down) scrollAch(1);
           if (up) scrollAch(-1);
         }
@@ -1886,6 +1909,10 @@
     achShowing = true;
     $("ach-toast-t").textContent = d.t;
     $("ach-toast-d").textContent = d.d;
+    $("ach-toast-s").textContent = d.label || "Conquista desbloqueada";
+    var img = $("ach-toast-img");
+    img.hidden = !d.img; $("ach-toast-star").hidden = !!d.img;
+    if (d.img) img.src = d.img;
     var el = $("ach-toast");
     el.hidden = true; void el.offsetWidth; el.hidden = false;   // reinicia a animação
     setTimeout(nextAch, 4200);
@@ -1898,6 +1925,22 @@
     $("ach").hidden = false;
     $("ach-count").textContent = "★ " + Conquistas.count() + " de " + Conquistas.total();
     var html = '<div class="ach-inner" id="ach-inner">';
+    // conquistas da comunidade (RetroAchievements)
+    var raU = window.RA && RA.user(), raSets = [];
+    html += '<div class="ra-card"><b class="ra-logo">RA</b><div><b class="ra-h"></b><span class="ra-s"></span></div>' +
+      '<span class="ra-k"><kbd class="key-dot c-y"></kbd> ' + (raU ? "conta" : "entrar") + '</span></div>';
+    if (raU && state.games) {
+      state.games.forEach(function (g) { var r = RA.info(gameKey(g)); if (r && r.total) raSets.push(r); });
+      var cur = RA.game && RA.key ? RA.info(RA.key) : null;
+      raSets.sort(function (a, b) { return (b === cur ? 1 : 0) - (a === cur ? 1 : 0) || (b.unlocked || 0) - (a.unlocked || 0); });
+      raSets.forEach(function (r) {
+        html += '<div class="ach-group ra-g"></div><div class="ach-grid">';
+        (r.list || []).forEach(function (a) {
+          html += '<div class="ach-item ra' + (a.u ? ' on' : '') + '"><img alt=""><div><b></b><span></span></div></div>';
+        });
+        html += '</div>';
+      });
+    }
     var order = ["gen", "smw", "alttp", "sm", "smk"];
     // jogo atual primeiro
     if (state.view === "ach" && from === "menu" && Conquistas.game) {
@@ -1922,6 +1965,22 @@
         items[k].querySelector("b").textContent = d.t;
         items[k].querySelector("span").textContent = d.d;
         k++;
+      });
+    });
+    var card = $("ach-list").querySelector(".ra-card");
+    card.querySelector(".ra-h").textContent = raU ? "RetroAchievements · " + raU.name : "Conquistas da comunidade (RetroAchievements)";
+    card.querySelector(".ra-s").textContent = raU ?
+      (raSets.length ? raSets.length + " dos seus jogos têm conquistas da comunidade · " + (raU.score || 0) + " pontos" : "Procurando os seus jogos no RetroAchievements…") :
+      "Milhares de conquistas feitas pela comunidade para quase todos os jogos de SNES. Crie uma conta grátis em retroachievements.org e entre aqui.";
+    var gh = $("ach-list").querySelectorAll(".ra-g"), ri = $("ach-list").querySelectorAll(".ach-item.ra"), q = 0;
+    raSets.forEach(function (r, i) {
+      gh[i].textContent = "Comunidade · " + r.title + " — " + Math.min(r.unlocked || 0, r.total) + "/" + r.total;
+      (r.list || []).forEach(function (a) {
+        var it = ri[q++], im = it.querySelector("img");
+        im.onerror = function () { im.style.visibility = "hidden"; };
+        im.src = a.u ? a.b : a.bl;
+        it.querySelector("b").textContent = a.t + (a.p ? " · " + a.p + " pts" : "");
+        it.querySelector("span").textContent = a.d + (!a.u && a.m ? " (" + a.m + ")" : "");
       });
     });
     state.achScroll = 0;
@@ -2091,37 +2150,53 @@
     $("det-del").hidden = !canDelete(g);
     $("det-desc").hidden = !g.action;
 
-    // conquistas
+    // conquistas: as da comunidade (RetroAchievements) + as do SNES TV
     var gk = g.action ? null : Conquistas.gameFor(cn, g.title, g.name);
-    var list, head;
-    if (g.action === "ach") { list = Conquistas.defs; head = "Todas as conquistas"; }
-    else if (gk) { list = Conquistas.listFor(gk); head = "Conquistas do jogo"; }
-    else if (!g.action) { list = Conquistas.listFor("gen"); head = "Conquistas gerais"; }
-    else list = null;
+    var ra = !g.action && window.RA ? RA.info(gameKey(g)) : null;
+    var list = [], head, note = "";
+    function local(defs) { return defs.map(function (d) { return { t: d.t, d: d.d, on: Conquistas.isUnlocked(d.id) }; }); }
+    if (g.action === "ach") { list = local(Conquistas.defs); head = "Conquistas do SNES TV"; }
+    else if (!g.action) {
+      if (ra) {
+        (ra.list || []).forEach(function (a) { list.push({ t: a.t, d: a.d, on: !!a.u, img: a.u ? a.b : a.bl, p: a.p, m: a.m }); });
+        head = "Conquistas da comunidade";
+      }
+      if (gk) { list = list.concat(local(Conquistas.listFor(gk))); head = head || "Conquistas do jogo"; }
+      if (!list.length) {
+        list = local(Conquistas.listFor("gen")); head = "Conquistas gerais";
+        note = window.RA && !RA.user() ? "Entre no RetroAchievements (cartucho Conquistas → VERDE) para ver as conquistas que a comunidade fez para este jogo. As gerais valem para todos:" :
+          window.RA && RA.known(gameKey(g)) ? "A comunidade ainda não fez conquistas para este jogo. As gerais valem para todos:" :
+          "Este jogo ainda não tem conquistas próprias. As gerais valem para todos:";
+      }
+    } else list = null;
 
     $("det-ach-box").hidden = !list;
     var ul = $("det-ach");
     ul.innerHTML = "";
     if (!list) return;
-    var got = list.filter(function (d) { return Conquistas.isUnlocked(d.id); }).length;
+    var pr = !g.action ? achProgress(g) : null;
+    var got = list.filter(function (d) { return d.on; }).length, total = list.length;
+    // o servidor pode saber de desbloqueios que a lista guardada ainda não tem
+    if (pr && pr.total && list.length && head !== "Conquistas gerais") { got = Math.max(got, pr.got); total = Math.max(total, pr.total); }
     $("det-ach-title").textContent = head;
-    $("det-ach-count").textContent = "★ " + got + "/" + list.length;
-    $("det-bar").style.width = Math.round(got / list.length * 100) + "%";
-    if (!gk && !g.action) {
-      var note = document.createElement("li");
-      note.className = "det-note";
-      note.textContent = "Este jogo ainda não tem conquistas próprias. As gerais valem para todos:";
-      ul.appendChild(note);
+    $("det-ach-count").textContent = "★ " + got + "/" + total;
+    $("det-bar").style.width = Math.round(got / Math.max(1, total) * 100) + "%";
+    if (note) {
+      var li0 = document.createElement("li");
+      li0.className = "det-note";
+      li0.textContent = note;
+      ul.appendChild(li0);
     }
     // desbloqueadas primeiro
-    list.slice().sort(function (a, b) { return (Conquistas.isUnlocked(b.id) ? 1 : 0) - (Conquistas.isUnlocked(a.id) ? 1 : 0); })
+    list.slice().sort(function (a, b) { return (b.on ? 1 : 0) - (a.on ? 1 : 0); })
       .forEach(function (d) {
-        var li = document.createElement("li"), on = Conquistas.isUnlocked(d.id);
-        if (on) li.className = "on";
-        li.innerHTML = "<i></i><b></b><span></span>";
-        li.querySelector("i").textContent = on ? "★" : "☆";
-        li.querySelector("b").textContent = d.t;
-        li.querySelector("span").textContent = d.d;
+        var li = document.createElement("li");
+        li.className = (d.on ? "on" : "") + (d.img ? " pic" : "");
+        li.innerHTML = (d.img ? '<img alt="">' : "<i></i>") + "<b></b><span></span>";
+        if (d.img) { var im = li.querySelector("img"); im.onerror = function () { im.style.visibility = "hidden"; }; im.src = d.img; }
+        else li.querySelector("i").textContent = d.on ? "★" : "☆";
+        li.querySelector("b").textContent = d.t + (d.p ? "  · " + d.p + " pts" : "");
+        li.querySelector("span").textContent = d.d + (!d.on && d.m ? "  (" + d.m + ")" : "");
         ul.appendChild(li);
       });
     // não coube tudo: mostra quantas faltam
@@ -2133,6 +2208,114 @@
       more.className = "det-note";
       more.textContent = "+ mais " + hidden + " — veja todas no cartucho Conquistas";
       ul.appendChild(more);
+    }
+  }
+
+  // progresso de conquistas de um jogo (comunidade + SNES TV)
+  function achProgress(g) {
+    if (!g || g.action) return null;
+    var got = 0, total = 0, ra = window.RA ? RA.info(gameKey(g)) : null;
+    if (ra && ra.total) { total += ra.total; got += Math.min(ra.unlocked || 0, ra.total); }
+    var cn = coverName(g), gk = Conquistas.gameFor(cn, g.title, g.name);
+    if (gk) {
+      var l = Conquistas.listFor(gk);
+      total += l.length;
+      got += l.filter(function (d) { return Conquistas.isUnlocked(d.id); }).length;
+    }
+    return total ? { got: got, total: total, ra: !!ra } : null;
+  }
+  // barra transparente embaixo de cada cartucho
+  function paintBars() {
+    var tiles = $("grid").children, items = state.items || [];
+    for (var i = 0; i < tiles.length && i < items.length; i++) {
+      var g = items[i], el = tiles[i];
+      if (g.action) continue;
+      var bar = el.querySelector(".tile-prog");
+      var pr = achProgress(g);
+      if (!bar) {
+        bar = document.createElement("div");
+        bar.className = "tile-prog";
+        bar.innerHTML = "<i></i><span></span>";
+        el.appendChild(bar);
+      }
+      bar.classList.toggle("none", !pr);
+      bar.classList.toggle("full", !!pr && pr.got >= pr.total);
+      bar.querySelector("i").style.width = pr ? Math.round(pr.got / pr.total * 100) + "%" : "0";
+      bar.querySelector("span").textContent = pr ? "★ " + pr.got + "/" + pr.total : "sem conquistas";
+    }
+  }
+
+  // ---------------- RetroAchievements: entrar com a conta ----------------
+  function openRa(from) {
+    state.raFrom = from || state.view;
+    state.view = "ra";
+    $("ach").hidden = true;
+    $("ra-box").hidden = false;
+    paintRa();
+    if (!RA.user()) setTimeout(function () { try { $("ra-user").focus(); } catch (e) {} }, 80);
+  }
+  function paintRa(msg, cls) {
+    var u = RA.user();
+    $("ra-form").hidden = !!u;
+    $("ra-logged").hidden = !u;
+    if (u) { $("ra-name").textContent = u.name; $("ra-score").textContent = (u.score || 0) + " pontos"; }
+    $("ra-keys").innerHTML = u ? "<kbd class=\"key-dot c-a\"></kbd> sair da conta · <kbd>VOLTAR</kbd> fechar" :
+      "<kbd>▲ ▼</kbd> trocar campo · <kbd>OK</kbd> entrar · <kbd>VOLTAR</kbd> fechar";
+    var st = $("ra-status");
+    st.textContent = msg || "";
+    st.className = "pair-status" + (cls ? " " + cls : "");
+  }
+  function closeRa() {
+    try { document.activeElement.blur(); } catch (e) {}
+    $("ra-box").hidden = true;
+    if (state.raFrom === "ach" || state.raFrom === "menu-ach") openAch(state.achFrom);
+    else { state.view = "launcher"; setFocus(); }
+  }
+  function raSubmit() {
+    var u = $("ra-user").value.replace(/\s/g, ""), p = $("ra-pass").value;
+    if (!u) { $("ra-user").focus(); return; }
+    if (!p) { $("ra-pass").focus(); return; }
+    try { document.activeElement.blur(); } catch (e) {}
+    paintRa("Entrando…");
+    RA.login(u, p).then(function (a) {
+      $("ra-pass").value = "";
+      paintRa("Pronto! Bem-vindo, " + a.name + ". Procurando as conquistas dos seus jogos…", "ok");
+      raScan();
+    }, function (e) { paintRa(e.message, "err"); });
+  }
+  function raLogout() {
+    RA.logout();
+    paintRa("Você saiu da conta.", "ok");
+    if (state.items) paintBars();
+  }
+  function raScan() {
+    if (!window.RA || !RA.user() || !state.games || !state.games.length) return;
+    var fl = window.fflate ? Promise.resolve() : loadScript("lib/fflate.js");
+    fl.then(function () {
+      RA.scan(state.games, gameKey, function (g) { return bytesOf(g).then(romOf); });
+    });
+  }
+
+  // eventos do rcheevos durante o jogo
+  function raEvent(type, d) {
+    if (type === "game") {
+      if (d && d.total) toast("🏆 RetroAchievements: " + d.unlocked + " de " + d.total + " conquistas da comunidade", 3500);
+      else if (!d) toast("Este jogo não tem conquistas da comunidade (ou é outra versão da ROM)", 3000);
+      return;
+    }
+    if (type === "loginfail") { toast("RetroAchievements: " + ((d && d.msg) || "não consegui entrar"), 3500); return; }
+    if (type === 1 && d) {
+      showAch({ t: d.t, d: d.d + (d.p ? " · " + d.p + " pts" : ""), img: d.b, label: "Conquista da comunidade" });
+    } else if ((type === 7 || type === 9) && d && d.m) {
+      toast("🏆 " + d.t + " — " + d.m, 1800);
+    } else if (type === 15) {
+      showAch({ t: "Jogo completo!", d: "Você fez todas as conquistas da comunidade deste jogo", label: "RetroAchievements" });
+    } else if (type === 16 && d) {
+      toast("RetroAchievements: " + (d.msg || "erro do servidor"), 3500);
+    } else if (type === 17) {
+      toast("Sem internet: as conquistas serão enviadas quando a conexão voltar", 3000);
+    } else if (type === 18) {
+      toast("Conquistas enviadas ✓", 2000);
     }
   }
 
@@ -2416,7 +2599,9 @@
       var waiting = n && n.stalled && performance.now() - n.stalledAt > 700;
       $("net-wait").hidden = !waiting;
       $("net-badge").textContent = "ONLINE · J" + (NET.role === "host" ? 1 : 2) + " · " + (NET.rtt ? NET.rtt + " ms" : "…");
+      paintPlayers();
     }, 1000);
+    paintPlayers();
   }
   function netLost() {
     if (!NET) return;
@@ -2501,7 +2686,7 @@
   function buildSideHelp(g, rom) {
     var key = helpKeyFor(g, rom), h = key && GAME_HELP[key] ? GAME_HELP[key] : GENERIC_HELP;
     var L = $("side-left"), R = $("side-right");
-    var html = '<div class="side-h">Botões</div><div class="side-game"></div><ul class="side-list">';
+    var html = '<div id="side-players" class="side-players"></div><div class="side-h">Botões</div><div class="side-game"></div><ul class="side-list">';
     h.rows.forEach(function () { html += "<li><span></span><em></em></li>"; });
     html += "</ul>";
     L.innerHTML = html;
@@ -2511,6 +2696,7 @@
       lis[i].querySelector("span").innerHTML = btnChip(r[0]);
       lis[i].querySelector("em").textContent = r[1];
     });
+    paintPlayers();
 
     var pads = connectedPads(), pt = pads.length ? padType(pads[0]) : null;
     var rows = pt === "xbox" ? XBOX_ROWS : pt === "ps" ? PS_ROWS : TV_LIKE ? REMOTE_ROWS : PC_ROWS;
@@ -2533,6 +2719,50 @@
     fitPlayer();
   }
 
+  // quem é cada jogador (topo da faixa esquerda) e, no jogo online, o ping
+  var P_COLORS = ["p1", "p2", "p3", "p4"];
+  function playerList() {
+    var pads = connectedPads(), out = [];
+    var me = NET && NET.started ? (NET.role === "host" ? 0 : 1) : -1;
+    for (var n = 0; n < 4; n++) {
+      var who = [];
+      if (me >= 0) {
+        // online: este TV controla só o seu jogador; o outro é o amigo
+        if (n === me) {
+          who.push(pads[0] ? padName(pads[0]) : TV_LIKE ? "Controle da TV" : "Teclado");
+          if (ctrl.conns[0]) who.push("Celular");
+        } else if (n === 1 - me) who.push((NET.friend || "Amigo") + " (online)");
+      } else {
+        if (pads[n]) who.push(padName(pads[n]));
+        if (ctrl.conns[n]) who.push("Celular");
+        if (n === 0 && !pads[0]) who.push(TV_LIKE ? "Controle da TV" : "Teclado");
+      }
+      if (who.length) out.push({ n: n, who: who.join(" + "), me: me < 0 ? n === 0 : n === me });
+    }
+    return out;
+  }
+  function pingClass(ms) { return ms <= 60 ? "good" : ms <= 120 ? "ok" : "bad"; }
+  function paintPlayers() {
+    var box = $("side-players");
+    if (!box) return;
+    var list = playerList().sort(function (a, b) { return (b.me ? 1 : 0) - (a.me ? 1 : 0) || a.n - b.n; }), html = "";
+    list.forEach(function (p, i) {
+      if (i === 0 || p.me) {
+        html += '<div class="pl-main"><span class="pl-tag ' + P_COLORS[p.n] + '">Jogador ' + (p.n + 1) + '</span>' +
+          (NET && NET.started && p.me ? '<span class="pl-you">você</span>' : "") + '<div class="pl-who"></div></div>';
+      } else html += '<div class="pl-row"><span class="pl-dot ' + P_COLORS[p.n] + '">J' + (p.n + 1) + '</span><span class="pl-who"></span></div>';
+    });
+    // garante que o jogador desta TV aparece em destaque
+    if (NET && NET.started) {
+      var ms = NET.rtt || 0, cls = ms ? pingClass(ms) : "";
+      html += '<div class="pl-net"><span class="pl-bars ' + cls + '"><i></i><i></i><i></i><i></i></span><b>ONLINE</b>' +
+        '<span class="pl-ping">' + (ms ? "Ping " + ms + " ms" : "Medindo…") + '</span></div>';
+    }
+    box.innerHTML = html;
+    var whos = box.querySelectorAll(".pl-who");
+    list.forEach(function (p, i) { if (whos[i]) whos[i].textContent = p.who; });
+  }
+
   // posiciona as faixas laterais ao lado da área do jogo
   function placeSides(gx, gw, vw) {
     var L = $("side-left"), R = $("side-right");
@@ -2551,6 +2781,14 @@
   function init() {
     registerTvKeys();
     Conquistas.onUnlock = showAch;
+    if (window.RA) {
+      RA.onEvent = raEvent;
+      RA.onUpdate = function () {
+        if (state.view !== "launcher" || !state.items) return;
+        paintBars();
+        showDetails(state.items[state.focus]);
+      };
+    }
     paintGreeting();
     if (!userName()) setTimeout(openName, 300);
     showDeviceInfo();
