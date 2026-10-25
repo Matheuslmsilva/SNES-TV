@@ -1025,6 +1025,7 @@
     if (c === K.EXIT) return;   // deixa a TV tratar o EXIT
 
     if (state.view === "net" && state.netMode === "join") {
+      if (formKey(e, c, ["net-code", "net-join-ok", "net-join-back"], netJoin, function () { netEnd(); netShow("home"); })) return;
       if (c === K.ENTER || c === 65376) { e.preventDefault(); netJoin(); }
       else if (c === K.BACK || c === K.ESC || c === 65385) { e.preventDefault(); closeNet(); }
       return;                    // deixa digitar o código
@@ -1104,6 +1105,7 @@
         else if (c === K.DOWN || c === K.RIGHT) netPickMove(1);
         else if (c === K.ENTER) netHost(state.games[state.netIdx]);
         else if (isBack(c)) netShow("home");
+      } else if (state.netMode === "host" && c === K.ENTER && NET && NET.failed && state.netRetry) { state.netRetry();
       } else if (isBack(c)) { if (state.netMode === "host" && NET && NET.live) closeNet(); else if (state.netMode === "host") { netEnd(); netShow("pick"); } else closeNet(); }
     } else if (state.view === "ach") {
       if (c === K.GREEN || c === 71 /* G */) openRa("ach");
@@ -1375,6 +1377,7 @@
             if (down || right) netPickMove(1);
             if (ok) netHost(state.games[state.netIdx]);
             if (back) netShow("home");
+          } else if (state.netMode === "host" && ok && NET && NET.failed && state.netRetry) { state.netRetry();
           } else if (back) {
             if (state.netMode === "host" && NET && NET.live) closeNet();
             else if (state.netMode === "host") { netEnd(); netShow("pick"); }
@@ -2387,6 +2390,8 @@
   $("name-ok").addEventListener("click", function () { saveName(); });
   $("name-back").addEventListener("click", function () { if (userName()) closeName(); });
   $("ra-ok").addEventListener("click", function () { raSubmit(); });
+  $("net-join-ok").addEventListener("click", function () { netJoin(); });
+  $("net-join-back").addEventListener("click", function () { netEnd(); netShow("home"); });
   $("ra-out").addEventListener("click", function () { raLogout(); });
   $("ra-back").addEventListener("click", function () { closeRa(); });
 
@@ -2427,6 +2432,28 @@
   // ====================================================================
   var NET = null;   // { role, peer, conn, code, game, hash, delay, rtt, started }
 
+  // só o necessário para criar/entrar na partida (o emulador carrega depois, ao abrir o jogo)
+  function netPeerLibs() {
+    var chain = Promise.resolve();
+    if (!window.fflate) chain = chain.then(function () { return loadScript("lib/fflate.js"); });
+    if (!(window.Peer || window.peerjs)) chain = chain.then(function () { return loadScript("lib/peerjs.min.js"); });
+    return chain;
+  }
+  function netSupported() {
+    if (window.RTCPeerConnection || window.webkitRTCPeerConnection) return true;
+    netStatus("O navegador desta TV não tem a conexão direta (WebRTC) que o jogo online usa. Tente pelo app instalado.", "err");
+    return false;
+  }
+  // espera a conexão com o servidor; se demorar, avisa em vez de ficar parado
+  function netWatch(peer, what) {
+    clearTimeout(NET.wd);
+    var me = NET;
+    me.wd = setTimeout(function () {
+      if (NET !== me || me.opened) return;
+      netStatus("O servidor do jogo online não respondeu (" + what + "). Confira a internet da TV e aperte OK para tentar de novo.", "err");
+      me.failed = true;
+    }, 15000);
+  }
   function netLibs() {
     var chain = Promise.resolve();
     if (!window.fflate) chain = chain.then(function () { return loadScript("lib/fflate.js"); });
@@ -2470,6 +2497,9 @@
     var b = $("net-home").querySelectorAll(".net-btn");
     for (var i = 0; i < b.length; i++) b[i].classList.toggle("focused", i === state.netBtn);
   }
+  window.addEventListener("error", function (ev) {
+    if (state.view === "net" && state.netMode !== "home") netStatus("Erro: " + (ev.message || "desconhecido"), "err");
+  });
   function netStatus(text, kind) { var el = $("net-st-" + state.netMode); if (el) { el.textContent = text; el.className = "phone-status " + (kind || ""); } }
   function openNet() { netShow("home"); }
   function closeNet(keep) {
@@ -2548,58 +2578,98 @@
   function netHost(g, live) {
     state.netPick = false;
     $("net-banner").hidden = true;
+    netEnd();
     netShow("host");
     $("net-host-back").textContent = live ? "cancelar e voltar ao jogo" : "cancelar";
-    $("net-code-big").textContent = "······";
     $("net-game").textContent = g.title;
-    netStatus("Preparando…");
     var code = newCode();
+    // o código aparece na hora; a conexão é feita em seguida
+    $("net-code-big").textContent = code;
+    netStatus("Conectando ao servidor do jogo online…");
     NET = { role: "host", code: code, game: g, live: !!live };
-    netLibs().then(function () { return bytesOf(g); }).then(function (data) {
-      NET.hash = fnv(romOf(data));
+    state.netRetry = function () { netHost(g, live); };
+    if (!netSupported()) return;
+    var me = NET;
+    netPeerLibs().then(function () {
+      if (NET !== me) return;
       var P = window.Peer || window.peerjs.Peer;
       var peer = new P("snestv-net-" + code);
-      NET.peer = peer;
+      me.peer = peer;
+      netWatch(peer, "criar partida");
       peer.on("open", function () {
-        $("net-code-big").textContent = code;
-        netStatus("Passe o código para o seu amigo. Aguardando a outra TV…");
+        if (NET !== me) return;
+        me.opened = true; clearTimeout(me.wd);
+        netStatus(me.hash ? "Pronto! Passe o código para o seu amigo. Aguardando a outra TV…" : "Pronto! Passe o código para o seu amigo. (Lendo o jogo…)", "ok");
       });
       peer.on("error", function (e) {
-        if (e.type === "unavailable-id") { netEnd(); netHost(g, live); return; }
-        netStatus("Sem conexão com a internet (" + e.type + ")", "err");
+        if (NET !== me) return;
+        if (e.type === "unavailable-id") { netHost(g, live); return; }
+        clearTimeout(me.wd); me.failed = true;
+        netStatus("Sem conexão com o servidor do jogo online (" + e.type + "). Aperte OK para tentar de novo.", "err");
       });
       peer.on("connection", function (conn) {
-        if (NET.conn) { try { conn.close(); } catch (e) {} return; }   // só uma TV convidada
-        NET.conn = conn;
+        if (me.conn) { try { conn.close(); } catch (e) {} return; }   // só uma TV convidada
+        me.conn = conn;
         conn.on("open", function () { netStatus("Outra TV conectada. Conferindo o jogo…", "ok"); });
-        conn.on("data", netData);
+        conn.on("data", function (d) {
+          // se a outra TV chegar antes do jogo ser lido, espera
+          if (d && d.t === "hello" && !me.hash) { me.pendingHello = d; return; }
+          netData(d);
+        });
         conn.on("close", netLost);
       });
-    }).catch(function (e) { console.error(e); netStatus("Não foi possível preparar o jogo", "err"); });
+      // lê o jogo (pen drive pode demorar) para conferir se a outra TV tem o mesmo arquivo
+      return bytesOf(g).then(function (data) {
+        if (NET !== me) return;
+        me.hash = fnv(romOf(data));
+        if (me.opened) netStatus("Pronto! Passe o código para o seu amigo. Aguardando a outra TV…", "ok");
+        if (me.pendingHello) { var h = me.pendingHello; me.pendingHello = null; netData(h); }
+      });
+    }).catch(function (e) {
+      console.error(e);
+      if (NET !== me) return;
+      me.failed = true;
+      netStatus("Não foi possível preparar a partida: " + ((e && e.message) || e) + ". Aperte OK para tentar de novo.", "err");
+    });
   }
 
   // ---------------- convidado ----------------
   function netJoin() {
     var code = ($("net-code").value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-    if (code.length !== 6) { netStatus("O código tem 6 letras/números", "err"); return; }
-    try { $("net-code").blur(); } catch (e) {}
-    netStatus("Conectando à outra TV…");
+    if (code.length !== 6) { netStatus("O código tem 6 letras/números", "err"); try { $("net-code").focus(); } catch (e) {} return; }
+    try { document.activeElement.blur(); } catch (e) {}
+    netEnd();
+    netStatus("Conectando ao servidor do jogo online…");
     NET = { role: "guest", code: code };
-    netLibs().then(function () {
+    if (!netSupported()) return;
+    var me = NET;
+    netPeerLibs().then(function () {
+      if (NET !== me) return;
       var P = window.Peer || window.peerjs.Peer;
       var peer = new P();
-      NET.peer = peer;
+      me.peer = peer;
+      netWatch(peer, "entrar na partida");
       peer.on("open", function () {
+        if (NET !== me) return;
+        netStatus("Procurando a partida " + code + "…");
         var conn = peer.connect("snestv-net-" + code, { reliable: true, serialization: "binary", metadata: { name: userName() } });
-        NET.conn = conn;
-        conn.on("open", function () { conn.send({ t: "hello", name: userName() || "Amigo" }); netStatus("Conectado! Recebendo o jogo da partida…", "ok"); });
+        me.conn = conn;
+        conn.on("open", function () {
+          me.opened = true; clearTimeout(me.wd);
+          conn.send({ t: "hello", name: userName() || "Amigo" }); netStatus("Conectado! Recebendo o jogo da partida…", "ok");
+        });
         conn.on("data", netData);
         conn.on("close", netLost);
       });
       peer.on("error", function (e) {
-        netStatus(e.type === "peer-unavailable" ? "Não achei a partida. Confira o código e se a outra TV está na tela do código." :
-          "Sem conexão com a internet (" + e.type + ")", "err");
+        if (NET !== me) return;
+        clearTimeout(me.wd);
+        netStatus(e.type === "peer-unavailable" ? "Não achei a partida. Confira o código e se a outra TV está mostrando esse código." :
+          "Sem conexão com o servidor do jogo online (" + e.type + ")", "err");
       });
+    }).catch(function (e) {
+      console.error(e);
+      netStatus("Não foi possível conectar: " + ((e && e.message) || e), "err");
     });
   }
 
