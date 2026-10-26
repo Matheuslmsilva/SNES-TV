@@ -8,6 +8,15 @@
 (function () {
   "use strict";
   var HOST = "https://retroachievements.org/dorequest.php";
+  // O RetroAchievements não deixa um SITE falar direto com ele (bloqueio "CORS" do navegador).
+  // O app instalado na TV não tem esse bloqueio. Pelo site, os pedidos passam por um "relay"
+  // próprio (Cloudflare Worker, arquivo ra-relay-worker.js) configurado em js/ra-config.js.
+  var INSTALLED = typeof tizen !== "undefined" && !!(window.tizen && tizen.application);
+  function relay() { var r = String(window.SNESTV_RA_RELAY || "").replace(/\/+$/, ""); return INSTALLED || !/^https:\/\//.test(r) ? "" : r; }
+  function endpoint(url) {
+    var r = relay();
+    return r ? String(url || HOST).replace(/^https?:\/\/(www\.)?retroachievements\.org\/dorequest\.php/, r) : (url || HOST);
+  }
   var MEDIA = "https://media.retroachievements.org/Badge/";
 
   function load(k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
@@ -108,7 +117,7 @@
     return new Promise(function (resolve, reject) {
       var body = Object.keys(params).map(function (k) { return k + "=" + encodeURIComponent(params[k]); }).join("&");
       var x = new XMLHttpRequest();
-      x.open("POST", HOST, true);
+      x.open("POST", endpoint(HOST), true);
       x.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
       x.timeout = 20000;
       x.onload = function () {
@@ -122,7 +131,8 @@
   }
   function errText(e) {
     return e && e.message === "offline" ?
-      "Não consegui falar com o RetroAchievements. Confira a internet da TV (no navegador, alguns modelos bloqueiam; no app instalado funciona)." :
+      (INSTALLED || relay() ? "Não consegui falar com o RetroAchievements. Confira a internet da TV." :
+        "O RetroAchievements não deixa sites se conectarem direto. No app instalado na TV funciona; pelo site, falta configurar o \"relay\" (veja o LEIA-ME).") :
       (e && e.message) || "Erro desconhecido";
   }
 
@@ -334,7 +344,7 @@
       });
     }
     var x = new XMLHttpRequest();
-    x.open(body != null ? "POST" : "GET", url, true);
+    x.open(body != null ? "POST" : "GET", endpoint(url), true);
     if (body != null) x.setRequestHeader("Content-Type", ctype || "application/x-www-form-urlencoded");
     x.timeout = 15000;
     x.onload = function () {
