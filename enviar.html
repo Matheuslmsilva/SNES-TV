@@ -78,11 +78,18 @@
     <ul id="list"></ul>
   </section>
 
+  <section class="card" id="drive-card">
+    <button type="button" class="btn" id="drive-btn" disabled>☁ Conectar meu Google Drive na TV</button>
+    <p class="hint" id="drive-hint">Os jogos de SNES do seu Drive aparecem na lista da TV e são baixados na hora de jogar. A TV só pode ler os arquivos.</p>
+  </section>
+
   <p class="hint">Deixe a tela do QR Code aberta na TV enquanto envia. Funciona mesmo que o celular esteja no 4G.</p>
 </main>
 
 <script src="js/compat.js"></script>
 <script src="lib/peerjs.min.js"></script>
+<script src="js/drive-config.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 (function () {
   "use strict";
@@ -99,7 +106,27 @@
   function enablePick(on) {
     $("files").disabled = !on;
     $("pick-label").style.opacity = on ? "1" : "0.4";
+    $("drive-btn").disabled = !on || !driveId();
+    $("drive-btn").style.opacity = $("drive-btn").disabled ? "0.4" : "1";
   }
+  // ---------- Google Drive: login aqui no celular e manda o acesso (1 hora, só leitura) para a TV ----------
+  function driveId() { return /\.apps\.googleusercontent\.com$/.test(String(window.SNESTV_GOOGLE_CLIENT_ID || "")) ? window.SNESTV_GOOGLE_CLIENT_ID : ""; }
+  if (!driveId()) $("drive-hint").textContent = "O Google Drive ainda não foi configurado neste site.";
+  $("drive-btn").addEventListener("click", function () {
+    if (!conn || !conn.open) return;
+    if (!(window.google && google.accounts && google.accounts.oauth2)) { $("drive-hint").textContent = "O login do Google ainda está carregando. Tente de novo em alguns segundos."; return; }
+    var tc = google.accounts.oauth2.initTokenClient({
+      client_id: driveId(), scope: "https://www.googleapis.com/auth/drive.readonly",
+      callback: function (r) {
+        if (!r || !r.access_token) { $("drive-hint").textContent = "Login cancelado."; return; }
+        conn.send({ t: "drive", token: r.access_token, expires: +r.expires_in || 3600 });
+        $("drive-hint").textContent = "Pronto! Acesso enviado para a TV. Veja a lista de jogos na TV.";
+        $("drive-btn").textContent = "☁ Google Drive conectado ✓";
+      },
+      error_callback: function (e) { $("drive-hint").textContent = "Não deu certo: " + ((e && (e.message || e.type)) || "login cancelado"); }
+    });
+    tc.requestAccessToken();
+  });
   enablePick(false);
 
   function askCode(msg) {

@@ -65,6 +65,8 @@
   }
 
   var ICONS = {
+    drive: '<svg viewBox="0 0 64 44" aria-hidden="true"><path d="M22 4h20l18 31H40z" fill="#f2b705"/><path d="M22 4L4 35l10 7 18-31z" fill="#1fa463"/>' +
+      '<path d="M14 42h38l8-7H24z" fill="#4285f4"/></svg>',
     pair: '<svg viewBox="0 0 64 40" aria-hidden="true"><path d="M16 4h32a14 14 0 0 1 0 28c-5 0-8-3-10-6H26c-2 3-5 6-10 6A14 14 0 0 1 16 4z" fill="#ece9f2"/>' +
       '<path d="M15 12v10M10 17h10" stroke="#332e45" stroke-width="3.5" stroke-linecap="round"/>' +
       '<circle cx="46" cy="12.5" r="3.2" fill="#3a63c8"/><circle cx="52" cy="18" r="3.2" fill="#d6383c"/>' +
@@ -342,6 +344,15 @@
         return { name: r.name, size: r.size, source: "local", data: r.data };
       });
       var all = usb.games.concat(pcGames, local);
+      // jogos do Google Drive que ainda não estão na TV
+      if (window.Drive && Drive.linked()) {
+        var have = {};
+        all.forEach(function (g) { have[gameKey(g)] = 1; });
+        Drive.files().forEach(function (f) {
+          if (!have[f.name + "|" + f.size]) all.push({ name: f.name, size: f.size, source: "drive", driveId: f.id });
+        });
+        local.forEach(function (g) { if (Drive.files().some(function (f) { return f.name === g.name && f.size === g.size; })) g.fromDrive = true; });
+      }
       var seen = {};
       all = all.filter(function (g) { var k = g.source + gameKey(g); if (seen[k]) return false; seen[k] = 1; return true; });
       all.forEach(function (g) { var c = cleanTitle(g.name); g.title = c.title; g.region = c.region; });
@@ -367,6 +378,7 @@
       if (IS_TIZEN) label.push(usb.drives ? (usb.drives === 1 ? "Pen drive conectado" : usb.drives + " pen drives") : "Nenhum pen drive");
       if (pcGames.length) label.push("Pasta do PC");
       if (local.length) label.push("Jogos salvos nesta TV");
+      if (window.Drive && Drive.linked()) label.push("Google Drive");
       if (!label.length) label.push(IS_TIZEN ? "Nenhum pen drive" : "Navegador");
       $("source-label").textContent = label.join(" · ");
       $("count").textContent = all.length ? all.length + (all.length === 1 ? " jogo" : " jogos") : "";
@@ -386,6 +398,7 @@
     items.unshift({ action: "net", title: "Jogar online", meta: "Com outra TV, por código" });
     items.unshift({ action: "ach", title: "Conquistas", meta: Conquistas.count() + " de " + Conquistas.total() });
     items.unshift({ action: "pair", title: "Celular como controle", meta: ctrlCount() ? ctrlCount() + " conectado(s)" : "Ler QR Code no celular" });
+    items.unshift({ action: "drive", title: "Google Drive", meta: window.Drive && Drive.linked() ? Drive.files().length + " jogos · " + Drive.who() : "Conectar sua conta" });
     items.unshift({ action: "phone", title: "Adicionar pelo celular", meta: "Ler QR Code e enviar jogos" });
     $("empty").hidden = items.length > 0;
     grid.hidden = items.length === 0;
@@ -398,7 +411,7 @@
       var initial = g.action === "ach" ? "★" : g.action === "pair" ? "PAD" : g.action === "phone" ? "QR" : g.action ? "+" : (g.title.match(/[A-Za-z0-9À-ú]/) || ["?"])[0].toUpperCase();
       var hue = g.action ? 250 : hashHue(g.title);
       var meta = g.action ? g.meta :
-        [g.region, fmtSize(g.size), g.source === "usb" ? "USB" : g.source === "pc" ? "PC" : g.source === "local" ? "salvo" : ""].filter(Boolean).join(" · ");
+        [g.region, fmtSize(g.size), g.source === "usb" ? "USB" : g.source === "pc" ? "PC" : g.source === "drive" ? "☁ Drive" : g.source === "local" ? (g.fromDrive ? "Drive ✓" : "salvo") : ""].filter(Boolean).join(" · ");
       el.innerHTML =
         '<div class="cart"><div class="shell"><div class="cart-label" style="background:' + labelBg(hue, g.action) + '"><span></span></div></div></div>' +
         '<div class="title"></div><div class="meta"></div>';
@@ -474,6 +487,7 @@
     if (g.action === "pair") { openPair("launcher"); return; }
     if (g.action === "ach") { openAch("launcher"); return; }
     if (g.action === "net") { openNet(); return; }
+    if (g.action === "drive") { openDrive(); return; }
     if (state.netPick) { netHost(g); return; }
     startGame(g);
   }
@@ -507,6 +521,7 @@
     var g = state.items && state.items[state.focus];
     if (!g || g.action) return;
     if (g.source === "pc") { toast("Este jogo está na pasta do PC — para tirar, apague o arquivo lá", 3500); return; }
+    if (g.source === "drive") { toast("Este jogo está no seu Google Drive — para tirar da lista, apague ou mova lá", 3500); return; }
     if (!canDelete(g)) return;
     state.delGame = g;
     state.delBtn = 0;
@@ -572,6 +587,7 @@
 
   function getRomBytes(g) {
     if (g.source === "local") return Promise.resolve(g.file || g.data);
+    if (g.source === "drive") return driveBytes(g);
     if (g.source === "pc") {
       return snesGet(g.url, "arraybuffer");
     }
@@ -593,7 +609,7 @@
     state.view = "loading";
     state.net = net || null;
     state.current = g;
-    showLoading(g, g.source === "usb" ? "Lendo do pen drive…" : "Carregando " + g.title + "…");
+    showLoading(g, g.source === "usb" ? "Lendo do pen drive…" : g.source === "drive" ? "Baixando do Google Drive…" : "Carregando " + g.title + "…");
     store("snestv.last", gameKey(g));
 
     getRomBytes(g).then(function (data) {
@@ -654,6 +670,14 @@
       }, 40000);
     }).catch(function (e) {
       console.error(e);
+      if (g.source === "drive") {
+        // Drive: volta para a lista em vez de recarregar a página
+        $("loading").hidden = true; $("game").hidden = true; $("launcher").hidden = false;
+        state.view = "launcher";
+        if (e && /expirado/.test(e.message)) { toast("O acesso ao Google Drive acabou (dura 1 hora). Entre de novo.", 4000); openDrive(); }
+        else toast("Não consegui baixar do Google Drive: " + ((e && e.message) || e), 4000);
+        return;
+      }
       fail("Não foi possível ler o arquivo do jogo.");
     });
   }
@@ -1136,6 +1160,11 @@
         else if (isBack(c)) netShow("home");
       } else if (state.netMode === "host" && c === K.ENTER && NET && NET.failed && state.netRetry) { state.netRetry();
       } else if (isBack(c)) { if (state.netMode === "host" && NET && NET.live) closeNet(); else if (state.netMode === "host") { netEnd(); netShow("pick"); } else closeNet(); }
+    } else if (state.view === "drive") {
+      if (c === K.UP || c === K.LEFT) driveMove(-1);
+      else if (c === K.DOWN || c === K.RIGHT) driveMove(1);
+      else if (c === K.ENTER) driveAction();
+      else if (isBack(c)) closeDrive();
     } else if (state.view === "ach") {
       if (c === K.GREEN || c === 71 /* G */) openRa("ach");
       else if (isBack(c) || c === K.ENTER) closeAch();
@@ -1431,6 +1460,11 @@
             else if (state.netMode === "host") { netEnd(); netShow("pick"); }
             else closeNet();
           }
+        } else if (state.view === "drive") {
+          if (up || left) driveMove(-1);
+          if (down || right) driveMove(1);
+          if (ok) driveAction();
+          if (back) closeDrive();
         } else if (state.view === "name") {
           if (back && userName()) closeName();
         } else if (state.view === "ra") {
@@ -1775,6 +1809,7 @@
         return;
       }
       if (!d || typeof d !== "object") return;
+      if (d.t === "drive" && d.token) { driveFromPhone(d); return; }
       if (d.t === "hello") {
         var model = $("tv-model") ? $("tv-model").textContent : "";
         conn.send({ t: "hi", tv: (/Samsung/.test(model) ? model : "TV") + (destActual() === "usb" ? " (salvando no pen drive)" : "") });
@@ -1814,6 +1849,7 @@
     phone = null;
     padPrev = {};
     if (got) { toast(got === 1 ? "1 jogo adicionado" : got + " jogos adicionados", 2200); refresh(true); }
+    if (state.phoneDrive) { state.phoneDrive = false; openDrive(); }
   }
 
   // ====================================================================
@@ -2203,6 +2239,7 @@
     pair: "Transforme o celular num controle de Super Nintendo. Até 4 celulares, um para cada jogador. Eles se reconectam sozinhos.",
     ach: "Todas as conquistas num lugar só: as gerais, que valem para qualquer jogo, e as de Super Mario World, Zelda, Super Metroid e Super Mario Kart.",
     open: "Escolha arquivos .sfc, .smc ou .zip deste aparelho. Eles ficam salvos para a próxima vez.",
+    drive: "Conecte o seu Google Drive: os jogos de SNES de lá (.sfc, .smc e .zip com nome de jogo) aparecem nesta lista. Ao jogar, o jogo é baixado do Drive e uma cópia fica salva na TV.",
     net: "Jogue com um amigo em outra TV, pela internet. Uma TV cria a partida e recebe um código; a outra entra com esse código. As duas precisam ter o mesmo arquivo do jogo."
   };
   var detKey = null;
@@ -2229,7 +2266,7 @@
     if (!g.action) {
       if (g.region) meta.push(g.region);
       if (g.size) meta.push(fmtSize(g.size));
-      meta.push(g.source === "usb" ? "Pen drive" : g.source === "pc" ? "Pasta do PC" : "Salvo na TV");
+      meta.push(g.source === "usb" ? "Pen drive" : g.source === "pc" ? "Pasta do PC" : g.source === "drive" ? "Google Drive (baixa ao jogar)" : g.fromDrive ? "Do Google Drive, salvo na TV" : "Salvo na TV");
       if (g.last) meta.push("último jogado");
     }
     $("det-meta").textContent = meta.join(" · ");
@@ -3034,11 +3071,126 @@
   }
 
   // ====================================================================
+  // Google Drive
+  // ====================================================================
+  function driveBytes(g) {
+    if (!Drive.valid()) {
+      return Promise.reject(new Error("drive-expirado"));
+    }
+    return Drive.download({ id: g.driveId }, function (got, total) {
+      if (state.view === "loading") $("loading-text").textContent = "Baixando do Google Drive… " + (total ? Math.round(got / total * 100) + "%" : fmtSize(got));
+    }).then(function (buf) {
+      // guarda uma cópia na TV: da próxima vez abre na hora, mesmo sem internet
+      romsPut({ name: g.name, size: g.size, data: buf, added: Date.now(), from: "drive" })["catch"](function () {});
+      return buf;
+    });
+  }
+
+  function driveState() {
+    if (!Drive.configured()) return "config";
+    return Drive.linked() ? (Drive.valid() ? "on" : "expired") : "off";
+  }
+  var DRIVE_BTNS = {
+    here: "Entrar com o Google nesta TV",
+    phone: "Entrar pelo celular (QR Code)",
+    reload: "Procurar jogos de novo",
+    logout: "Desconectar o Google Drive",
+    back: "Voltar"
+  };
+  function openDrive() {
+    state.view = "drive";
+    state.driveBtn = 0;
+    $("drive").hidden = false;
+    paintDrive();
+  }
+  function closeDrive() {
+    $("drive").hidden = true;
+    state.view = "launcher";
+    padPrev = {};
+    renderGrid();
+  }
+  function driveButtons() {
+    var st = driveState();
+    if (st === "config") return ["back"];
+    if (st === "off") return IS_TIZEN ? ["phone", "back"] : ["here", "phone", "back"];
+    if (st === "expired") return (IS_TIZEN ? ["phone"] : ["here", "phone"]).concat(["logout", "back"]);
+    return ["reload", "logout", "back"];
+  }
+  function paintDrive(msg, kind) {
+    var st = driveState(), t = $("drive-text");
+    if (st === "config") t.innerHTML = "O Google Drive ainda não foi configurado neste site. Falta o <b>ID do cliente do Google</b> (arquivo js/drive-config.js).";
+    else if (st === "off") t.textContent = "Entre com a sua conta do Google. O SNES TV só lê os arquivos (não apaga nem muda nada) e mostra na lista os jogos de SNES que estão no seu Drive.";
+    else {
+      var n = Drive.files().length;
+      t.textContent = "Conectado como " + Drive.who() + " · " + n + (n === 1 ? " jogo encontrado" : " jogos encontrados") + ". " +
+        (st === "on" ? "O acesso vale por mais " + Drive.minutesLeft() + " min (regra do Google para sites); jogos já baixados ficam na TV." :
+          "O acesso de 1 hora acabou: entre de novo para baixar jogos novos. Os já baixados continuam funcionando.");
+    }
+    var ul = $("drive-btns"), keys = driveButtons();
+    if (state.driveBtn >= keys.length) state.driveBtn = keys.length - 1;
+    ul.innerHTML = "";
+    keys.forEach(function (k, i) {
+      var li = document.createElement("li");
+      li.textContent = DRIVE_BTNS[k];
+      li.setAttribute("data-k", k);
+      if (i === state.driveBtn) li.className = "focused";
+      li.addEventListener("click", function () { state.driveBtn = i; driveAction(); });
+      ul.appendChild(li);
+    });
+    var s = $("drive-status");
+    s.textContent = msg || "";
+    s.className = "phone-status " + (kind || "");
+  }
+  function driveMove(d) {
+    var n = driveButtons().length;
+    state.driveBtn = (state.driveBtn + d + n) % n;
+    paintDrive($("drive-status").textContent, $("drive-status").className.replace("phone-status", "").trim());
+  }
+  function driveAction() {
+    var k = driveButtons()[state.driveBtn];
+    if (k === "back") return closeDrive();
+    if (k === "logout") { Drive.logout(); paintDrive("Google Drive desconectado.", "ok"); refresh(true); return; }
+    if (k === "phone") { $("drive").hidden = true; state.phoneDrive = true; openPhone(); return; }
+    if (k === "reload") {
+      paintDrive("Procurando jogos no Drive…");
+      Drive.list().then(function (l) { paintDrive(l.length + " jogos encontrados.", "ok"); refresh(true); },
+        function (e) { paintDrive(driveErr(e), "err"); });
+      return;
+    }
+    if (k === "here") {
+      paintDrive("Abrindo o login do Google… (pode abrir uma janela nova)");
+      Drive.loginHere().then(function (l) {
+        state.driveBtn = 0;
+        paintDrive("Pronto! " + l.length + " jogos encontrados no seu Drive.", "ok");
+        refresh(true);
+      }, function (e) { paintDrive(driveErr(e), "err"); });
+    }
+  }
+  function driveErr(e) {
+    var m = (e && e.message) || String(e);
+    if (m === "expirado") return "O acesso ao Drive acabou (dura 1 hora). Entre de novo.";
+    if (/popup|janela|blocked/i.test(m)) return "A TV bloqueou a janela do Google. Use \"Entrar pelo celular\".";
+    return "Não deu certo: " + m;
+  }
+  // token mandado pelo celular (tela "Adicionar pelo celular")
+  function driveFromPhone(d) {
+    Drive.setToken(d.token, d.expires).then(function (l) {
+      phoneStatus("Google Drive conectado ✓ — " + l.length + " jogos encontrados. Aperte VOLTAR.", "ok");
+      toast("☁ Google Drive conectado: " + l.length + " jogos", 3000);
+      refresh(true);
+    }, function (e) { phoneStatus("Google Drive: " + driveErr(e), "err"); });
+  }
+
+  // ====================================================================
   // Início
   // ====================================================================
   function init() {
     registerTvKeys();
     Conquistas.onUnlock = showAch;
+    if (window.Drive) {
+      var baseSnes = Drive.looksSnes;
+      Drive.looksSnes = function (n) { return baseSnes(n) || !!findCover(cleanTitle(n).title); };
+    }
     if (window.RA) {
       RA.onEvent = raEvent;
       RA.onUpdate = function () {

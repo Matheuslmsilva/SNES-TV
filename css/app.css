@@ -477,3 +477,9 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 .sn-a { color: #fff; background: #d6383c !important; } .sn-b { color: #222; background: #e8b71f !important; }
 .sn-x { color: #fff; background: #3a63c8 !important; } .sn-y { color: #fff; background: #2f9a4e !important; }
 .side-list.remote li b.sn-b { color: #222; }
+
+/* Google Drive */
+.drive-panel .drive-logo { width: 5rem; height: 3.5rem; margin: 0 auto 0.8rem; background: no-repeat center / contain
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 44'%3E%3Cpath d='M22 4h20l18 31H40z' fill='%23f2b705'/%3E%3Cpath d='M22 4L4 35l10 7 18-31z' fill='%231fa463'/%3E%3Cpath d='M14 42h38l8-7H24z' fill='%234285f4'/%3E%3C/svg%3E"); }
+.drive-btns { max-width: 34rem; margin: 1.2rem auto 0.4rem; text-align: left; }
+.drive-btns li { -webkit-justify-content: center; justify-content: center; font-size: 1.15rem; font-weight: 700; color: #ece9f2; background: rgba(255,255,255,0.05); margin-bottom: 0.45rem; cursor: pointer; }
