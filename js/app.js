@@ -575,17 +575,18 @@
     if (f === -1) { if (dy > 0) { state.focus = Math.min(Math.max(0, state.focus), Math.max(0, n - 1)); if (state.focus < 0) state.focus = 0; setFocus(); } return; }
     if (state.zone === "side") {
       var list = sideItems();
-      if (dx > 0) { if (n) { state.zone = "grid"; state.focus = Math.min(state.focus, n - 1); if (state.focus < 0) state.focus = 0; } setFocus(); return; }
+      if (dx > 0) {
+        // ▶ numa seção: abre a seção e entra na grade
+        var cur = list[state.sideIdx];
+        if (cur && cur.filter && cur.k !== state.section) { state.section = cur.k; state.focus = 0; state.firstRow = 0; renderGrid(); n = state.items.length; }
+        if (n) { state.zone = "grid"; state.focus = Math.min(Math.max(0, state.focus), n - 1); }
+        setFocus(); return;
+      }
       if (dy < 0 && state.sideIdx === 0) { state.focus = -1; setFocus(); return; }
       if (dy) {
         state.sideIdx = Math.max(0, Math.min(list.length - 1, state.sideIdx + dy));
         setFocus();
-        // seção: mostra os jogos dela logo (com um pequeno atraso para não pesar ao rolar o menu)
-        var it = list[state.sideIdx];
-        clearTimeout(sideTimer);
-        if (it.filter && it.k !== state.section) sideTimer = setTimeout(function () {
-          state.section = it.k; state.focus = 0; state.firstRow = 0; renderGrid();
-        }, 280);
+        // a seção só troca com OK ou ▶ (passar por cima não muda a lista)
       }
       return;
     }
@@ -1578,7 +1579,8 @@
     f.innerHTML =
       '<span class="pad-name">🎮 ' + padName(p).replace(/[<>&]/g, "") + '</span>' +
       "<span>" + pill("✚") + " ou analógico Escolher</span>" +
-      "<span>" + face(0) + " Jogar</span>" +
+      "<span>" + face(0) + " Jogar / OK</span>" +
+      "<span>" + face(1) + " Voltar</span>" +
       "<span>" + face(3) + " Controles</span>" +
       "<span>" + face(2) + " Excluir</span>" +
       "<span>" + pill(m.k[6]) + " Configurar controle</span>" +
@@ -1684,7 +1686,9 @@
           return false;
         };
         var up = hit(BTN.UP), down = hit(BTN.DOWN), left = hit(BTN.LEFT), right = hit(BTN.RIGHT);
-        var ok = hit(BTN.B) || hit(BTN.A) || hit(BTN.START), back = hit(BTN.Y);
+        // joystick: botão de BAIXO (Ⓐ Xbox / ✕ PS / B SNES) ou Start = confirmar;
+        // botão da DIREITA (Ⓑ Xbox / ○ PS / A SNES), o da esquerda ou o botão central = voltar
+        var ok = hit(BTN.B) || hit(BTN.START), back = hit(BTN.A) || hit(BTN.Y) || hit("menu");
 
         if (state.view === "launcher") {
           if (left) moveFocus(-1, 0); if (right) moveFocus(1, 0);
@@ -1693,6 +1697,12 @@
           if (hit(BTN.X)) openHelp("launcher");
           if (hit(BTN.SELECT)) openWizard();
           if (hit(BTN.Y)) removeFocused();
+          // voltar na lista: vai para o menu lateral (ou sai da escolha de jogo online)
+          if (hit(BTN.A) || hit("menu")) {
+            if (state.netPick) { state.netPick = false; $("net-banner").hidden = true; toast("Partida online cancelada", 1800); }
+            else if (state.focus === -1) { state.focus = 0; setFocus(); }
+            else if (state.zone !== "side") { state.zone = "side"; setFocus(); }
+          }
         } else if (state.view === "game") {
           if ((any[BTN.SELECT] && any[BTN.START]) || hit("menu")) { openMenu(); }
           else {
@@ -1727,12 +1737,12 @@
           if (down) menuMove(0, 1);
           if (left) menuMove(-1, 0);
           if (right) menuMove(1, 0);
-          if (hit(BTN.B) || hit(BTN.A)) menuAction();
+          if (ok) menuAction();
           if (back || hit("menu")) closeMenu();
         } else if (state.view === "help") {
           if (ok || back) closeHelp();
         } else if (state.view === "phone") {
-          if (back || hit(BTN.B) || hit(BTN.A)) closePhone();
+          if (back || ok) closePhone();
           if (left) toggleDest(-1);
           if (right) toggleDest(1);
         } else if (state.view === "pair") {
@@ -1740,7 +1750,7 @@
         } else if (state.view === "del") {
           if (left) { state.delBtn = Math.max(0, state.delBtn - 1); paintDel(); }
           if (right) { state.delBtn = Math.min(2, state.delBtn + 1); paintDel(); }
-          if (hit(BTN.B) || hit(BTN.A)) confirmDel();
+          if (ok) confirmDel();
           if (back) closeDel();
         } else if (state.view === "net") {
           if (state.netMode === "home") {
@@ -1767,7 +1777,7 @@
           if (left || up) slotMove(-1);
           if (right || down) slotMove(1);
           if (hit(BTN.B) || hit(BTN.START)) slotOk();
-          if (back || hit(BTN.A) || hit("menu")) closeSlots(true);
+          if (back) closeSlots(true);
         } else if (state.view === "name" || state.view === "ra" || (state.view === "net" && state.netMode === "join")) {
           // telas com campo de texto e botões: o joystick anda entre eles; baixo = OK, direita/esquerda = voltar
           var ids = state.view === "name" ? ["name-input", "name-ok", "name-back"] : state.view === "ra" ? ["ra-user", "ra-pass", "ra-ok", "ra-out", "ra-back"] : ["net-code", "net-join-ok", "net-join-back"];
@@ -1780,7 +1790,7 @@
             if (a && a.tagName === "BUTTON") a.click();
             else if (cur < 0 && items[0]) items[0].focus();
           }
-          if (back || hit(BTN.A) || hit("menu")) {
+          if (back) {
             if (state.view === "name") { if (userName()) closeName(); }
             else if (state.view === "ra") closeRa();
             else { netEnd(); netShow("home"); }
@@ -2030,8 +2040,8 @@
       else if (hit(BTN.DOWN)) wizMove(1);
       else if (hit(BTN.LEFT)) wizSide(-1);
       else if (hit(BTN.RIGHT)) wizSide(1);
-      else if (hit(BTN.B) || hit(BTN.A)) { wiz.nav = st; wizOk(); return; }
-      else if (hit(BTN.Y) || hit("menu")) { wiz.nav = st; wizBack(); return; }
+      else if (hit(BTN.B) || hit(BTN.START)) { wiz.nav = st; wizOk(); return; }
+      else if (hit(BTN.A) || hit(BTN.Y) || hit("menu")) { wiz.nav = st; wizBack(); return; }
       wiz.nav = st;
       return;
     }
