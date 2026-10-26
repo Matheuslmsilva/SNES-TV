@@ -586,3 +586,11 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 .tile .title { max-height: none; min-height: 2.15rem; margin-top: 0.4rem; -webkit-line-clamp: 2; }
 .tile { padding-bottom: 1rem; }
 .tile-prog.none { visibility: hidden; }
+
+/* dicas embaixo com os botões do controle conectado */
+.hints.pad .pad-name { color: #b9adff; font-weight: 800; }
+.hints kbd.pad-face { display: inline-block; width: 1.7rem; height: 1.7rem; line-height: 1.7rem; border-radius: 50%; padding: 0; text-align: center;
+  color: #fff; font-weight: 800; font-size: 0.95rem; border: 0; vertical-align: middle; }
+.hints kbd.pad-face.ps { background: #1f2126 !important; font-size: 1.05rem; }
+.hints kbd.pad-pill { border-radius: 0.8rem; padding: 0.1rem 0.6rem; font-size: 0.8rem; font-weight: 800; }
+.ra-card .ra-btn { background: #5b4bd6; color: #fff; font-weight: 800; padding: 0.5rem 1rem; border-radius: 0.6rem; border: 2px solid #b9adff; }

@@ -1306,8 +1306,8 @@
       else if (c === K.ENTER) driveAction();
       else if (isBack(c)) closeDrive();
     } else if (state.view === "ach") {
-      if (c === K.GREEN || c === 71 /* G */) openRa("ach");
-      else if (isBack(c) || c === K.ENTER) closeAch();
+      if (c === K.GREEN || c === 71 /* G */ || c === K.ENTER) openRa("ach");
+      else if (isBack(c)) closeAch();
       else if (c === K.DOWN) scrollAch(1);
       else if (c === K.UP) scrollAch(-1);
     } else if (state.view === "pair") {
@@ -1468,7 +1468,36 @@
     return out;
   }
 
+  // barra de dicas embaixo da lista: botões do controle conectado (ou do controle remoto)
+  var REMOTE_HINTS = null, hintsSig = "";
+  function paintHints(pads) {
+    var f = $("hints");
+    if (!f) return;
+    if (REMOTE_HINTS === null) REMOTE_HINTS = f.innerHTML;
+    var p = pads[0], model = p ? (padModel() !== "auto" ? padModel() : wizGuessModel(p)) : null;
+    if (p && padType(p) === "generic" && !customMap(p) && !autoEntry(p) && padModel() === "auto") model = "generic";
+    var sig = model ? model + "|" + padName(p) : "remote";
+    if (sig === hintsSig) return;
+    hintsSig = sig;
+    if (!model) { f.innerHTML = REMOTE_HINTS; f.classList.remove("pad"); return; }
+    var m = WIZ_MODELS[model] || WIZ_MODELS.snes;
+    function face(i) {   // 0 baixo, 1 direita, 2 esquerda, 3 cima
+      return '<kbd class="pad-face' + (m.dark ? " ps" : "") + '" style="' + (m.dark ? "color:" : "background:") + m.c[i] + '">' + m.k[i] + "</kbd>";
+    }
+    function pill(t) { return '<kbd class="pad-pill">' + t + "</kbd>"; }
+    f.innerHTML =
+      '<span class="pad-name">🎮 ' + padName(p).replace(/[<>&]/g, "") + '</span>' +
+      "<span>" + pill("✚") + " ou analógico Escolher</span>" +
+      "<span>" + face(0) + " Jogar</span>" +
+      "<span>" + face(3) + " Controles</span>" +
+      "<span>" + face(2) + " Excluir</span>" +
+      "<span>" + pill(m.k[6]) + " Configurar controle</span>" +
+      "<span>" + pill(m.k[7]) + " Jogar / abrir</span>";
+    f.classList.add("pad");
+  }
+
   function updatePadBadge(pads) {
+    paintHints(pads);
     var el = $("pad-text"), box = $("pad-info");
     var phones = typeof ctrl !== "undefined" ? ctrlCount() : 0;
     if (!pads.length && phones) {
@@ -1649,8 +1678,8 @@
           if (back) closeRa();
           if (hit(BTN.X) && RA.user()) raLogout();
         } else if (state.view === "ach") {
-          if (hit(BTN.X)) openRa("ach");
-          else if (back || ok) closeAch();
+          if (hit(BTN.X) || ok) openRa("ach");
+          else if (back) closeAch();
           if (down) scrollAch(1);
           if (up) scrollAch(-1);
         }
@@ -2395,7 +2424,7 @@
     // conquistas da comunidade (RetroAchievements)
     var raU = window.RA && RA.user(), raSets = [];
     html += '<div class="ra-card"><b class="ra-logo">RA</b><div><b class="ra-h"></b><span class="ra-s"></span></div>' +
-      '<span class="ra-k"><kbd class="key-dot c-y"></kbd> ' + (raU ? "conta" : "entrar") + '</span></div>';
+      '<span class="ra-k ra-btn">' + (raU ? "OK · minha conta" : "OK · Conectar") + '</span></div>';
     if (raU && state.games) {
       state.games.forEach(function (g) { var r = RA.info(gameKey(g)); if (r && r.total) raSets.push(r); });
       var cur = RA.game && RA.key ? RA.info(RA.key) : null;
