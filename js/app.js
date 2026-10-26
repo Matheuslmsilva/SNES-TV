@@ -1349,8 +1349,31 @@
     if (/054c|dualshock|dualsense|playstation|ps[345]|wireless controller/i.test(id)) return "ps";
     return "generic";
   }
+  // ---------- mapeamento automático pelo modelo (base SDL GameControllerDB, ~570 controles) ----------
+  var GCDB = null, gcdbLoading = false;
+  function loadGcdb() {
+    if (GCDB || gcdbLoading) return;
+    gcdbLoading = true;
+    snesGet("gcdb.json", "text").then(function (t) {
+      try { GCDB = JSON.parse(t); } catch (e) { GCDB = {}; }
+      mapCache = {}; state.padBadgeDirty = true;
+      if (state.view === "game" && state.current) buildSideHelp(state.current, LITE ? LITE.rom : null);
+    }, function () { GCDB = {}; });
+  }
+  function vidPid(p) {
+    var id = String(p.id || ""), m = id.match(/Vendor:\s*([0-9a-f]{4})\s*Product:\s*([0-9a-f]{4})/i) || id.match(/^([0-9a-f]{4})-([0-9a-f]{4})-/i);
+    return m ? (m[1] + ":" + m[2]).toLowerCase() : null;
+  }
+  function autoEntry(p) {
+    if (!p || p.mapping === "standard") return null;
+    if (!GCDB) { loadGcdb(); return null; }
+    var k = vidPid(p);
+    return k && GCDB[k] ? GCDB[k] : null;
+  }
+
   function padName(p) {
-    var t = padType(p);
+    var t = padType(p), au = autoEntry(p);
+    if (au && t === "generic") return au.n;
     if (t === "xbox") return "Controle Xbox";
     if (t === "ps") return /dualsense|0ce6|ps5/i.test(p.id) ? "Controle PS5" : "Controle PlayStation";
     var n = (p.id || "").replace(/\s*\([^)]*(STANDARD GAMEPAD|Vendor:)[^)]*\)\s*$/i, "")
@@ -1400,8 +1423,17 @@
   }
   function readPad(p) {
     var map = customMap(p), out = {}, k;
-    var m = map || STD_MAP;
+    var auto = map ? null : autoEntry(p);
+    var m = map || (auto && auto.m) || STD_MAP;
     for (k in m) if (tokenOn(p, m[k])) out[k] = true;
+    // controle reconhecido pelo modelo: direcional no "hat" (no Linux/Tizen aparece nos últimos eixos)
+    if (auto && auto.h && p.axes.length >= 2) {
+      var hx = axisVal(p, p.axes.length - 2), hy = axisVal(p, p.axes.length - 1);
+      if ((hx === -1 || hx === 0 || hx === 1) && (hy === -1 || hy === 0 || hy === 1)) {
+        if (hx < 0) out[BTN.LEFT] = true; if (hx > 0) out[BTN.RIGHT] = true;
+        if (hy < 0) out[BTN.UP] = true; if (hy > 0) out[BTN.DOWN] = true;
+      }
+    }
     // analógico esquerdo → direcional (também nos joysticks configurados pelo assistente,
     // a não ser que o assistente já tenha usado esses eixos)
     var usesAxes = false;
@@ -1421,8 +1453,8 @@
           if (dir >= 5 && dir <= 7) out[BTN.LEFT] = true;
         }
       }
-      if (tokenOn(p, "b7")) out.turbo = true;   // gatilho direito (RT/R2/ZR)
-      if (tokenOn(p, "b16")) out.menu = true;   // botão central (Xbox/PS/Home)
+      if (!auto && tokenOn(p, "b7")) out.turbo = true;   // gatilho direito (RT/R2/ZR)
+      if (!auto && tokenOn(p, "b16")) out.menu = true;   // botão central (Xbox/PS/Home)
     }
     return out;
   }
@@ -1447,7 +1479,7 @@
       return;
     }
     el.textContent = pads.slice(0, 4).map(function (p, n) {
-      return "J" + (n + 1) + ": " + padName(p) + (customMap(p) ? " ✓" : "");
+      return "J" + (n + 1) + ": " + padName(p) + (customMap(p) ? " ✓" : autoEntry(p) ? " (auto)" : "");
     }).join("  ·  ") + (phones ? "  ·  📱 " + phones : "");
     box.classList.add("on");
   }
@@ -1457,12 +1489,15 @@
     var now = {}, changed = false;
     pads.forEach(function (p, n) {
       var k = p.index + "|" + p.id;
+      // controle "não padrão": espera a base de modelos carregar para dar o nome e os botões certos
+      if (!knownPads[k] && p.mapping !== "standard" && !GCDB) { loadGcdb(); return; }
       now[k] = padName(p);
       if (!knownPads[k]) {
         changed = true;
-        var precisa = p.mapping !== "standard" && !customMap(p);
+        var precisa = p.mapping !== "standard" && !customMap(p), auto = precisa && autoEntry(p);
         toast("🎮 " + padName(p) + " conectado — jogador " + (n + 1) +
-          (precisa ? ". Se os botões ficarem trocados, aperte VERDE na lista para configurar." : ""), precisa ? 5500 : 2600);
+          (auto ? ". Botões configurados automaticamente pelo modelo." :
+            precisa ? ". Se os botões ficarem trocados, use \"Configurar controle\" no menu." : ""), precisa ? 5000 : 2600);
       }
     });
     Object.keys(knownPads).forEach(function (k) {
