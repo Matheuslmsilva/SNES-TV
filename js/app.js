@@ -2144,7 +2144,8 @@
     var i = deviceInfo();
     $("tv-model").textContent = i.line1;
     $("tv-cpu").textContent = i.line2;
-    $("tv-extra").textContent = i.line3;
+    var v = String(window.SNESTV_V || "");
+    $("tv-extra").textContent = i.line3 + (v.length === 12 ? " · versão " + v.slice(6, 8) + "/" + v.slice(4, 6) + " " + v.slice(8, 10) + ":" + v.slice(10) : "");
     updatePadBadge(connectedPads());
   }
 
@@ -2157,6 +2158,8 @@
   function loadScript(src) {
     return new Promise(function (res, rej) {
       var s = document.createElement("script");
+      // versão do site no endereço: a TV não usa um arquivo antigo guardado
+      if (window.SNESTV_V && !/^https?:/.test(src)) src += (src.indexOf("?") < 0 ? "?" : "&") + "v=" + window.SNESTV_V;
       s.src = src; s.onload = res; s.onerror = rej;
       document.head.appendChild(s);
     });
