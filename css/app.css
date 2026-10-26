@@ -483,3 +483,25 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
   url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 44'%3E%3Cpath d='M22 4h20l18 31H40z' fill='%23f2b705'/%3E%3Cpath d='M22 4L4 35l10 7 18-31z' fill='%231fa463'/%3E%3Cpath d='M14 42h38l8-7H24z' fill='%234285f4'/%3E%3C/svg%3E"); }
 .drive-btns { max-width: 34rem; margin: 1.2rem auto 0.4rem; text-align: left; }
 .drive-btns li { -webkit-justify-content: center; justify-content: center; font-size: 1.15rem; font-weight: 700; color: #ece9f2; background: rgba(255,255,255,0.05); margin-bottom: 0.45rem; cursor: pointer; }
+
+/* ---------- menu lateral ---------- */
+.side-menu { -webkit-flex: none; flex: none; width: 17rem; margin: 1.2rem 0 1.6rem 3.4rem; padding: 0.8rem 0.6rem; overflow: hidden;
+  background: rgba(255,255,255,0.03); border-radius: 1.2rem; border: 0.06rem solid rgba(255,255,255,0.06); }
+.side-menu ul { list-style: none; margin: 0; padding: 0; }
+.side-menu li { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; padding: 0.62rem 0.8rem; border-radius: 0.7rem; color: #b8b2c6; font-size: 1.02rem; font-weight: 600;
+  border: 2px solid transparent; cursor: pointer; margin-bottom: 0.12rem; }
+.side-menu li i { font-style: normal; width: 1.9rem; -webkit-flex: none; flex: none; text-align: center; font-size: 1.15rem; margin-right: 0.6rem; }
+.side-menu li span { -webkit-flex: 1; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-menu li b { -webkit-flex: none; flex: none; font-size: 0.85rem; color: #9a94a8; margin-left: 0.4rem; }
+.side-menu li.sep { margin-bottom: 0.7rem; position: relative; }
+.side-menu li.sep:after { content: ""; position: absolute; left: 0.8rem; right: 0.8rem; bottom: -0.45rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.side-menu li.sep:last-child:after { display: none; }
+.side-menu li.current { color: #fff; background: rgba(108,95,199,0.22); }
+.side-menu li.current b { color: #e8b71f; }
+.side-menu li.focused { color: #fff; background: #5b4bd6; border-color: #b9adff; }
+.side-menu li.focused b { color: #fff; }
+.side-menu:not(.active) li.focused { background: transparent; border-color: transparent; }
+.grid { padding-left: 1.6rem; }
+.tile { width: 33.333%; }
+.tile .badge.pl { background: rgba(58,99,200,0.35); color: #cfe0ff; }
+.det-desc { white-space: pre-line; }

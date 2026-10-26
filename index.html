@@ -45,15 +45,15 @@
   </header>
 
   <main id="shelf">
+   <nav id="side" class="side-menu"><ul id="side-list"></ul></nav>
    <div class="grid-area">
     <div id="grid" class="grid" role="listbox" aria-label="Jogos"></div>
 
     <div id="empty" class="empty" hidden>
       <div class="cart big"><div class="shell"><div class="cart-label"><span>?</span></div></div></div>
-      <h2>Nenhum jogo encontrado</h2>
-      <p>Coloque os jogos de Super Nintendo (<b>.sfc</b>, <b>.smc</b> ou <b>.zip</b>) em um pen drive e conecte na TV.
-         A lista atualiza sozinha quando o pen drive é conectado.</p>
-      <p class="muted">Dica: uma pasta chamada <b>SNES</b> ou <b>roms</b> no pen drive ajuda a organizar, mas qualquer pasta funciona.</p>
+      <h2 id="empty-title">Nenhum jogo encontrado</h2>
+      <p id="empty-text">Coloque os jogos de Super Nintendo (<b>.sfc</b>, <b>.smc</b> ou <b>.zip</b>) em um pen drive e conecte na TV.</p>
+      <p class="muted"><kbd>◀</kbd> menu ao lado: adicionar jogos, Google Drive, controles e jogo online.</p>
     </div>
    </div>
     <aside id="details" class="details">

@@ -11,7 +11,7 @@
 
   var ROM_EXT = /\.(sfc|smc|swc|fig|zip|7z)$/i;
   var IS_TIZEN = typeof window.tizen !== "undefined" && !!window.tizen.filesystem;
-  var COLS = 4;
+  var COLS = 3;
 
   // Teclas do controle remoto Samsung
   var K = {
@@ -387,86 +387,211 @@
     }).then(function () { scanning = false; }, function () { scanning = false; });
   }
 
+  // ====================================================================
+  // Menu lateral (seções) + grade de cartuchos
+  // ====================================================================
+  var SIDE = [
+    { k: "all", t: "Jogos instalados", i: "🎮", filter: true },
+    { k: "two", t: "2 jogadores", i: "👥", filter: true },
+    { k: "drive", t: "Google Drive", i: "☁", filter: true },
+    { k: "add", t: "Adicionar jogo", i: "＋", act: "phone" },
+    { k: "adddrive", t: "Adicionar do Drive", i: "⇪", act: "drive" },
+    { k: "open", t: "Abrir arquivos…", i: "📂", act: "open" },
+    { k: "pad", t: "Configurar controle", i: "🕹", act: "wizard" },
+    { k: "pair", t: "Celular como controle", i: "📱", act: "pair" },
+    { k: "net", t: "Jogar online", i: "🌐", act: "net" },
+    { k: "ach", t: "Conquistas", i: "★", act: "ach" }
+  ];
+  var SIDE_INFO = {
+    all: "Os jogos do pen drive, da pasta do PC e os salvos nesta TV (inclusive os que vieram do Google Drive).",
+    two: "Jogos que dá para jogar em duas pessoas ou mais (alguns são alternados: um de cada vez). Com 3 ou 4 jogadores, o Multitap liga sozinho.",
+    drive: "Jogos de SNES do seu Google Drive. Ao abrir, o jogo é baixado e fica salvo na TV.",
+    add: "Mande jogos do celular para a TV: leia o QR Code com a câmera e escolha os arquivos .sfc, .smc ou .zip.",
+    adddrive: "Conecte o seu Google Drive: os jogos de SNES de lá aparecem na seção Google Drive.",
+    open: "Escolha arquivos .sfc, .smc ou .zip deste aparelho. Eles ficam salvos para a próxima vez.",
+    pad: "Joystick com botões trocados? Siga a tela apertando cada botão pedido. Fica salvo para aquele modelo.",
+    pair: "Transforme o celular num controle de Super Nintendo. Até 4 celulares, um para cada jogador.",
+    net: "Jogue com um amigo em outra TV, pela internet, com um código.",
+    ach: "Conquistas do SNES TV e da comunidade (RetroAchievements)."
+  };
+  function sideItems() {
+    var tvBrowser = /SMART-TV|Tizen|Web0S|NetCast|HbbTV/i.test(navigator.userAgent);
+    return SIDE.filter(function (it) { return it.k !== "open" || (!IS_TIZEN && !tvBrowser); });
+  }
+  state.zone = state.zone || "grid";
+  state.section = state.section || "all";
+  state.sideIdx = state.sideIdx || 0;
+
+  // quantos jogadores (base do libretro-database); 0 = não sabe
+  var PLAYERS = null;
+  function loadPlayers() {
+    return snesGet("players.json", "text").then(function (t) { try { PLAYERS = JSON.parse(t); } catch (e) {} }, function () {});
+  }
+  function playersOf(g) {
+    if (!PLAYERS || !g || g.action) return 0;
+    // rápido: pelo nome do arquivo; o nome oficial (busca de capa) só se já foi calculado
+    var n = PLAYERS[normTitle(g.title)];
+    if (n) return n;
+    // jogos instalados são poucos: pode buscar o nome oficial; os do Drive só se já foi calculado
+    var cn = g.source === "drive" ? coverCache[gameKey(g)] : coverName(g);
+    return cn ? PLAYERS[normTitle(cn)] || 0 : 0;
+  }
+
+  function sectionGames(sec) {
+    var all = state.games || [];
+    if (sec === "drive") return all.filter(function (g) { return g.source === "drive" || g.fromDrive; });
+    var inst = all.filter(function (g) { return g.source !== "drive"; });
+    if (sec === "two") return all.filter(function (g) { return playersOf(g) >= 2; });
+    return inst;
+  }
+  function sectionCount(sec) { return sectionGames(sec).length; }
+
+  function renderSide() {
+    var ul = $("side-list"), list = sideItems();
+    if (state.sideIdx >= list.length) state.sideIdx = 0;
+    ul.innerHTML = "";
+    list.forEach(function (it, i) {
+      var li = document.createElement("li");
+      li.className = (it.filter ? "sec" : "act") + (it.k === state.section ? " current" : "") + (state.zone === "side" && i === state.sideIdx ? " focused" : "");
+      li.innerHTML = "<i></i><span></span><b></b>";
+      li.querySelector("i").textContent = it.i;
+      li.querySelector("span").textContent = it.t;
+      if (it.filter) li.querySelector("b").textContent = state.games ? sectionCount(it.k) : "";
+      if (it.k === "drive" && !(window.Drive && Drive.linked())) li.querySelector("b").textContent = "";
+      if (i === list.length - 1 || (it.filter && list[i + 1] && !list[i + 1].filter)) li.className += " sep";
+      li.addEventListener("click", function () { state.zone = "side"; state.sideIdx = i; sideActivate(); });
+      ul.appendChild(li);
+    });
+  }
+
   function renderGrid() {
     detKey = null;
     var grid = $("grid");
     grid.innerHTML = "";
-    var items = state.games.slice();
-    // navegador da TV não abre arquivos; no PC/celular o seletor funciona
-    var tvBrowser = /SMART-TV|Tizen|Web0S|NetCast|HbbTV/i.test(navigator.userAgent);
-    if (!IS_TIZEN && !tvBrowser) items.unshift({ action: "open", title: "Abrir arquivos…", meta: "Escolher .sfc / .smc / .zip" });
-    items.unshift({ action: "net", title: "Jogar online", meta: "Com outra TV, por código" });
-    items.unshift({ action: "ach", title: "Conquistas", meta: Conquistas.count() + " de " + Conquistas.total() });
-    items.unshift({ action: "pair", title: "Celular como controle", meta: ctrlCount() ? ctrlCount() + " conectado(s)" : "Ler QR Code no celular" });
-    items.unshift({ action: "drive", title: "Google Drive", meta: window.Drive && Drive.linked() ? Drive.files().length + " jogos · " + Drive.who() : "Conectar sua conta" });
-    items.unshift({ action: "phone", title: "Adicionar pelo celular", meta: "Ler QR Code e enviar jogos" });
+    var items = sectionGames(state.section);
+    var emptyTxt = {
+      all: ["Nenhum jogo instalado", "Coloque jogos .sfc, .smc ou .zip num pen drive, ou use \"Adicionar jogo\" no menu ao lado."],
+      two: ["Nenhum jogo de 2 jogadores", "Os jogos para jogar em dupla aparecem aqui assim que estiverem na lista."],
+      drive: window.Drive && Drive.linked() ? ["Nenhum jogo no Google Drive", "Não achei arquivos .sfc, .smc ou .zip de SNES no seu Drive. Use \"Adicionar via Google Drive\" → Procurar de novo."] :
+        ["Google Drive não conectado", "Escolha \"Adicionar via Google Drive\" no menu ao lado para entrar com a sua conta."]
+    }[state.section] || ["", ""];
+    $("empty-title").textContent = emptyTxt[0];
+    $("empty-text").textContent = emptyTxt[1];
     $("empty").hidden = items.length > 0;
     grid.hidden = items.length === 0;
 
-    var lastIdx = -1;
+    // cartuchos "leves": capa, nome oficial e progresso só para os que estão na tela (ver hydrate)
+    var lastIdx = -1, frag = document.createDocumentFragment();
     items.forEach(function (g, i) {
       var el = document.createElement("div");
-      el.className = "tile" + (g.action ? " action" : "");
+      el.className = "tile";
       el.setAttribute("role", "option");
-      var initial = g.action === "ach" ? "★" : g.action === "pair" ? "PAD" : g.action === "phone" ? "QR" : g.action ? "+" : (g.title.match(/[A-Za-z0-9À-ú]/) || ["?"])[0].toUpperCase();
-      var hue = g.action ? 250 : hashHue(g.title);
-      var meta = g.action ? g.meta :
-        [g.region, fmtSize(g.size), g.source === "usb" ? "USB" : g.source === "pc" ? "PC" : g.source === "drive" ? "☁ Drive" : g.source === "local" ? (g.fromDrive ? "Drive ✓" : "salvo") : ""].filter(Boolean).join(" · ");
+      var meta = [g.region, fmtSize(g.size), g.source === "usb" ? "USB" : g.source === "pc" ? "PC" : g.source === "drive" ? "☁ Drive" : g.source === "local" ? (g.fromDrive ? "Drive ✓" : "salvo") : ""].filter(Boolean).join(" · ");
       el.innerHTML =
-        '<div class="cart"><div class="shell"><div class="cart-label" style="background:' + labelBg(hue, g.action) + '"><span></span></div></div></div>' +
+        '<div class="cart"><div class="shell"><div class="cart-label" style="background:' + labelBg(hashHue(g.title)) + '"><span></span></div></div></div>' +
         '<div class="title"></div><div class="meta"></div>';
-      setInitial(el.querySelector(".cart-label span"), g, initial);
-      if (!g.action) putCover(el.querySelector(".cart-label"), coverUrl(g));
-      var cn = g.action ? null : coverName(g);
-      el.querySelector(".title").textContent = cn ? cleanTitle(cn).title : g.title;
+      el.querySelector(".cart-label span").textContent = (g.title.match(/[A-Za-z0-9À-ú]/) || ["?"])[0].toUpperCase();
+      el.querySelector(".title").textContent = g.title;
       el.querySelector(".meta").textContent = meta;
       if (g.last) {
-        var b = document.createElement("span"); b.className = "badge"; b.textContent = "último";
-        el.querySelector(".meta").appendChild(b);
+        var bd = document.createElement("span"); bd.className = "badge"; bd.textContent = "último";
+        el.querySelector(".meta").appendChild(bd);
         lastIdx = i;
       }
-      el.addEventListener("click", function () { state.focus = i; setFocus(); activate(); });
-      grid.appendChild(el);
+      el.addEventListener("click", function () { state.zone = "grid"; state.focus = i; setFocus(); activate(); });
+      frag.appendChild(el);
     });
+    grid.appendChild(frag);
     state.items = items;
-    paintBars();
-    if (state.games.length) setTimeout(raScan, 1200);
     if (state.focus >= items.length || state.firstRender !== false) {
       state.focus = lastIdx >= 0 ? lastIdx : 0;
       state.firstRender = false;
     }
+    // lista vazia: o foco vai para o menu; quando chegarem jogos, volta para a grade
+    if (!items.length && state.zone === "grid") { state.zone = "side"; state.autoSide = true; }
+    else if (items.length && state.autoSide) { state.zone = "grid"; state.autoSide = false; }
+    state.firstRow = Math.min(state.firstRow || 0, Math.max(0, Math.floor((items.length - 1) / COLS)));
+    renderSide();
+    var cnt = items.length;
+    $("count").textContent = cnt ? cnt + (cnt === 1 ? " jogo" : " jogos") : "";
+    if (state.games.length) setTimeout(raScan, 1200);
     setFocus();
+  }
+
+  // completa os cartuchos visíveis (e uma linha antes/depois): capa, nome, jogadores, barra de conquistas
+  function hydrate() {
+    var tiles = $("grid").children, items = state.items || [];
+    var first = Math.max(0, (state.firstRow || 0) - 1) * COLS, last = Math.min(items.length, ((state.firstRow || 0) + 4) * COLS);
+    for (var i = first; i < last; i++) {
+      var el = tiles[i], g = items[i];
+      if (!el || el.hydrated) continue;
+      el.hydrated = true;
+      putCover(el.querySelector(".cart-label"), coverUrl(g));
+      var cn = coverName(g);
+      if (cn) el.querySelector(".title").textContent = cleanTitle(cn).title;
+      var pl = playersOf(g);
+      if (pl >= 2) {
+        var pb = document.createElement("span"); pb.className = "badge pl"; pb.textContent = "👥 " + pl;
+        el.querySelector(".meta").appendChild(pb);
+      }
+      paintBar(el, g);
+    }
   }
 
   function setFocus() {
     $("greet").classList.toggle("focused", state.focus === -1);
+    var tiles = $("grid").children, side = $("side-list").children;
+    for (var s2 = 0; s2 < side.length; s2++) side[s2].classList.toggle("focused", state.focus !== -1 && state.zone === "side" && s2 === state.sideIdx);
+    $("side").classList.toggle("active", state.zone === "side" && state.focus !== -1);
     if (state.focus === -1) {
-      var all = $("grid").children;
-      for (var j = 0; j < all.length; j++) all[j].classList.remove("focused");
-      state.firstRow = 0;
-      $("grid").style.transform = "translateY(0px)";
+      for (var j = 0; j < tiles.length; j++) tiles[j].classList.remove("focused");
       return;
     }
-    showDetails(state.items && state.items[state.focus]);
-    var tiles = $("grid").children;
-    for (var i = 0; i < tiles.length; i++) tiles[i].classList.toggle("focused", i === state.focus);
+    var inGrid = state.zone === "grid";
+    for (var i = 0; i < tiles.length; i++) tiles[i].classList.toggle("focused", inGrid && i === state.focus);
+    if (!inGrid) {
+      var it = sideItems()[state.sideIdx];
+      if (it) showDetails(it.filter ? { action: "sec:" + it.k, title: it.t, icon: it.i } : { action: it.act, title: it.t, sideKey: it.k, icon: it.i });
+    } else showDetails(state.items && state.items[state.focus]);
     var el = tiles[state.focus];
-    if (!el) return;
     // rolagem por linhas: o topo da tela sempre começa numa linha inteira
     var shelf = $("shelf"), grid = $("grid");
-    var row = Math.floor(state.focus / COLS);
-    var rowTop = function (r) { var t = tiles[r * COLS]; return t ? t.offsetTop : 0; };
-    var first = Math.min(state.firstRow || 0, row);
-    while (first < row && el.offsetTop + el.offsetHeight - rowTop(first) + 30 > shelf.clientHeight) first++;
-    state.firstRow = first;
-    grid.style.transform = "translateY(" + (first ? -(rowTop(first) - rowTop(0)) : 0) + "px)";
+    if (el && inGrid) {
+      var row = Math.floor(state.focus / COLS);
+      var rowTop = function (r) { var t = tiles[r * COLS]; return t ? t.offsetTop : 0; };
+      var first = Math.min(state.firstRow || 0, row);
+      while (first < row && el.offsetTop + el.offsetHeight - rowTop(first) + 30 > shelf.clientHeight) first++;
+      state.firstRow = first;
+      grid.style.transform = "translateY(" + (first ? -(rowTop(first) - rowTop(0)) : 0) + "px)";
+    } else if (!tiles.length) grid.style.transform = "translateY(0px)";
+    hydrate();
   }
 
+  var sideTimer = null;
   function moveFocus(dx, dy) {
+    state.autoSide = false;
     var n = state.items ? state.items.length : 0;
-    if (!n) return;
     var f = state.focus;
-    if (f === -1) { if (dy > 0) { state.focus = 0; setFocus(); } return; }
+    if (f === -1) { if (dy > 0) { state.focus = Math.min(Math.max(0, state.focus), Math.max(0, n - 1)); if (state.focus < 0) state.focus = 0; setFocus(); } return; }
+    if (state.zone === "side") {
+      var list = sideItems();
+      if (dx > 0) { if (n) { state.zone = "grid"; state.focus = Math.min(state.focus, n - 1); if (state.focus < 0) state.focus = 0; } setFocus(); return; }
+      if (dy < 0 && state.sideIdx === 0) { state.focus = -1; setFocus(); return; }
+      if (dy) {
+        state.sideIdx = Math.max(0, Math.min(list.length - 1, state.sideIdx + dy));
+        setFocus();
+        // seção: mostra os jogos dela logo (com um pequeno atraso para não pesar ao rolar o menu)
+        var it = list[state.sideIdx];
+        clearTimeout(sideTimer);
+        if (it.filter && it.k !== state.section) sideTimer = setTimeout(function () {
+          state.section = it.k; state.focus = 0; state.firstRow = 0; renderGrid();
+        }, 280);
+      }
+      return;
+    }
+    if (!n) { state.zone = "side"; setFocus(); return; }
+    // primeira coluna + ◀ → menu lateral
+    if (dx < 0 && f % COLS === 0) { state.zone = "side"; setFocus(); return; }
     if (dy < 0 && f < COLS) { state.focus = -1; setFocus(); return; }
     if (dx) f = Math.min(n - 1, Math.max(0, f + dx));
     if (dy) {
@@ -478,16 +603,30 @@
     setFocus();
   }
 
+  function sideActivate() {
+    var it = sideItems()[state.sideIdx];
+    if (!it) return;
+    if (it.filter) {
+      clearTimeout(sideTimer);
+      if (it.k !== state.section) { state.section = it.k; state.focus = 0; state.firstRow = 0; renderGrid(); }
+      if (state.items.length) { state.zone = "grid"; setFocus(); }
+      else if (it.k === "drive" && !(window.Drive && Drive.linked())) openDrive();
+      return;
+    }
+    if (it.act === "open") { $("file-input").click(); return; }
+    if (it.act === "phone") { openPhone(); return; }
+    if (it.act === "pair") { openPair("launcher"); return; }
+    if (it.act === "ach") { openAch("launcher"); return; }
+    if (it.act === "net") { openNet(); return; }
+    if (it.act === "drive") { openDrive(); return; }
+    if (it.act === "wizard") { openWizard(); return; }
+  }
+
   function activate() {
     if (state.focus === -1) { openName(); return; }
+    if (state.zone === "side") { sideActivate(); return; }
     var g = state.items && state.items[state.focus];
     if (!g) return;
-    if (g.action === "open") { $("file-input").click(); return; }
-    if (g.action === "phone") { openPhone(); return; }
-    if (g.action === "pair") { openPair("launcher"); return; }
-    if (g.action === "ach") { openAch("launcher"); return; }
-    if (g.action === "net") { openNet(); return; }
-    if (g.action === "drive") { openDrive(); return; }
     if (state.netPick) { netHost(g); return; }
     startGame(g);
   }
@@ -518,6 +657,7 @@
   // ---------------- excluir jogo ----------------
   function canDelete(g) { return g && !g.action && (g.source === "local" || (g.source === "usb" && g.tfile)); }
   function removeFocused() {
+    if (state.zone === "side" || state.focus < 0) return;
     var g = state.items && state.items[state.focus];
     if (!g || g.action) return;
     if (g.source === "pc") { toast("Este jogo está na pasta do PC — para tirar, apague o arquivo lá", 3500); return; }
@@ -2160,8 +2300,20 @@
     return 2 * inter / (na + nb);
   }
 
+  // resultado da busca de capa guardado na TV (a busca por nome parecido é pesada com muitos jogos)
+  var fcMemo = null, fcDirty = null;
   function findCover(title) {
     if (!COVERS) return null;
+    if (!fcMemo) { try { fcMemo = JSON.parse(localStorage.getItem("snestv.fc") || "{}"); } catch (e) { fcMemo = {}; } }
+    var mk = normTitle(title);
+    if (mk in fcMemo) return fcMemo[mk] || null;
+    var r = findCoverSlow(title);
+    fcMemo[mk] = r || 0;
+    clearTimeout(fcDirty);
+    fcDirty = setTimeout(function () { try { localStorage.setItem("snestv.fc", JSON.stringify(fcMemo)); } catch (e) {} }, 1500);
+    return r;
+  }
+  function findCoverSlow(title) {
     var k = normTitle(title);
     if (k.length < 3) return null;
     if (COVERS[k]) return COVERS[k];
@@ -2256,7 +2408,7 @@
       var old = lab.querySelector("img.cover"); if (old) lab.removeChild(old);
       lab.classList.remove("has-cover");
       lab.style.background = labelBg(g.action ? 250 : hashHue(g.title), g.action);
-      setInitial($("det-initial"), g, g.action ? ({ ach: "★", open: "+" }[g.action] || "+") :
+      setInitial($("det-initial"), g, g.action ? (g.icon || { ach: "★", open: "+" }[g.action] || "+") :
         (g.title.match(/[A-Za-z0-9]/) || ["?"])[0].toUpperCase());
       if (!g.action) putCover(lab, coverUrl(g));
     }
@@ -2270,7 +2422,7 @@
       if (g.last) meta.push("último jogado");
     }
     $("det-meta").textContent = meta.join(" · ");
-    $("det-desc").textContent = g.action ? (ACTION_INFO[g.action] || "") : "";
+    $("det-desc").textContent = g.action ? (g.sideKey && SIDE_INFO[g.sideKey]) || (/^sec:/.test(g.action) ? SIDE_INFO[g.action.slice(4)] + "\n\n" + sectionCount(g.action.slice(4)) + " jogos nesta seção." : "") || ACTION_INFO[g.action] || "" : "";
     $("det-del").hidden = !canDelete(g);
     $("det-desc").hidden = !g.action;
 
@@ -2288,7 +2440,7 @@
       if (gk) { list = list.concat(local(Conquistas.listFor(gk))); head = head || "Conquistas do jogo"; }
       if (!list.length) {
         list = local(Conquistas.listFor("gen")); head = "Conquistas gerais";
-        note = window.RA && !RA.user() ? "Entre no RetroAchievements (cartucho Conquistas → VERDE) para ver as conquistas que a comunidade fez para este jogo. As gerais valem para todos:" :
+        note = window.RA && !RA.user() ? "Entre no RetroAchievements (menu Conquistas → VERDE) para ver as conquistas que a comunidade fez para este jogo. As gerais valem para todos:" :
           window.RA && RA.known(gameKey(g)) ? "A comunidade ainda não fez conquistas para este jogo. As gerais valem para todos:" :
           "Este jogo ainda não tem conquistas próprias. As gerais valem para todos:";
       }
@@ -2330,7 +2482,7 @@
       ul.removeChild(ul.lastChild); hidden++;
       var more = document.createElement("li");
       more.className = "det-note";
-      more.textContent = "+ mais " + hidden + " — veja todas no cartucho Conquistas";
+      more.textContent = "+ mais " + hidden + " — veja todas no menu Conquistas";
       ul.appendChild(more);
     }
   }
@@ -2349,24 +2501,24 @@
     return total ? { got: got, total: total, ra: !!ra } : null;
   }
   // barra transparente embaixo de cada cartucho
+  function paintBar(el, g) {
+    var bar = el.querySelector(".tile-prog");
+    var pr = achProgress(g);
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.className = "tile-prog";
+      bar.innerHTML = "<i></i><span></span>";
+      el.appendChild(bar);
+    }
+    bar.classList.toggle("none", !pr);
+    bar.classList.toggle("full", !!pr && pr.got >= pr.total);
+    bar.querySelector("i").style.width = pr ? Math.round(pr.got / pr.total * 100) + "%" : "0";
+    bar.querySelector("span").textContent = pr ? "★ " + pr.got + "/" + pr.total : "sem conquistas";
+  }
+  // atualiza só os cartuchos já completos (os outros recebem a barra quando aparecerem)
   function paintBars() {
     var tiles = $("grid").children, items = state.items || [];
-    for (var i = 0; i < tiles.length && i < items.length; i++) {
-      var g = items[i], el = tiles[i];
-      if (g.action) continue;
-      var bar = el.querySelector(".tile-prog");
-      var pr = achProgress(g);
-      if (!bar) {
-        bar = document.createElement("div");
-        bar.className = "tile-prog";
-        bar.innerHTML = "<i></i><span></span>";
-        el.appendChild(bar);
-      }
-      bar.classList.toggle("none", !pr);
-      bar.classList.toggle("full", !!pr && pr.got >= pr.total);
-      bar.querySelector("i").style.width = pr ? Math.round(pr.got / pr.total * 100) + "%" : "0";
-      bar.querySelector("span").textContent = pr ? "★ " + pr.got + "/" + pr.total : "sem conquistas";
-    }
+    for (var i = 0; i < tiles.length && i < items.length; i++) if (tiles[i].hydrated) paintBar(tiles[i], items[i]);
   }
 
   // ---------------- RetroAchievements: entrar com a conta ----------------
@@ -3196,14 +3348,14 @@
       RA.onUpdate = function () {
         if (state.view !== "launcher" || !state.items) return;
         paintBars();
-        showDetails(state.items[state.focus]);
+        detKey = null; setFocus();
       };
     }
     paintGreeting();
     if (!userName()) setTimeout(openName, 300);
     showDeviceInfo();
     if (ctrlEnabled()) startCtrl();
-    loadCovers().then(function () { if (state.view === "launcher" && state.items) renderGrid(); });
+    Promise.all([loadCovers(), loadPlayers()]).then(function () { if (state.view === "launcher" && state.items) renderGrid(); });
     refresh(true);
     requestAnimationFrame(pollPads);
 
