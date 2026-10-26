@@ -527,3 +527,20 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 .wiz-models span.on { background: #5b4bd6; color: #fff; border-color: #b9adff; }
 .snes-pad .sp-labels text { fill: #fff; font-size: 17px; font-weight: 800; text-anchor: middle; pointer-events: none; font-family: inherit; }
 .snes-pad .sp-labels text.sm { font-size: 9px; fill: #3a3546; }
+
+/* configurar controle: escolher a peça e depois apertar o botão */
+.panel.wiz { width: 62rem; }
+.wiz-models.focus span.on { box-shadow: 0 0 0 0.25rem rgba(185,173,255,0.45); }
+.wiz-body { display: -webkit-flex; display: flex; -webkit-align-items: flex-start; align-items: flex-start; margin-top: 0.6rem; }
+.wiz-body .snes-pad { width: 24rem; -webkit-flex: none; flex: none; margin: 0.6rem 1.2rem 0 0; }
+.wiz-list { list-style: none; margin: 0; padding: 0; -webkit-flex: 1; flex: 1; max-height: 22rem; overflow: hidden; text-align: left; }
+.wiz-list li { display: -webkit-flex; display: flex; -webkit-align-items: baseline; align-items: baseline; padding: 0.38rem 0.8rem; border-radius: 0.55rem; border: 2px solid transparent; cursor: pointer; font-size: 0.98rem; }
+.wiz-list li span { font-weight: 700; color: #ece9f2; }
+.wiz-list li em { font-style: normal; color: #9a94a8; font-size: 0.82rem; margin-left: 0.5rem; -webkit-flex: 1; flex: 1; }
+.wiz-list li b { color: #b9adff; font-weight: 700; font-size: 0.88rem; margin-left: 0.6rem; }
+.wiz-list li.focused { background: rgba(91,75,214,0.35); border-color: #b9adff; }
+.wiz-list li.capture { background: #5b4bd6; }
+.wiz-list li.capture b { color: #fff; }
+.wiz-ask { font-size: 1.25rem; min-height: 1.6rem; }
+.wiz-ask.capture { color: #e8b71f; }
+.wiz-acts .fbtn.focused { border-color: #fff; box-shadow: 0 0 0 0.3rem rgba(185,173,255,0.45); -webkit-transform: scale(1.06); transform: scale(1.06); }

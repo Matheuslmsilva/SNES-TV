@@ -1314,11 +1314,12 @@
       if (isBack(c) || c === K.ENTER) closePair();
       else if (c === K.RED || c === 82) { stopCtrl(); toast("Celulares desconectados", 2000); closePair(); }
     } else if (state.view === "wizard") {
-      if (c === K.LEFT) wizModel(-1);
-      else if (c === K.RIGHT) wizModel(1);
-      else if (isBack(c)) closeWizard(false);
-      else if (c === K.ENTER) wizardSkip();
-      else if (c === K.RED || c === 82 /* R */) wizardReset();
+      if (c === K.UP) wizMove(-1);
+      else if (c === K.DOWN) wizMove(1);
+      else if (c === K.LEFT) wizSide(-1);
+      else if (c === K.RIGHT) wizSide(1);
+      else if (c === K.ENTER) wizOk();
+      else if (isBack(c) || c === K.RED) wizBack();
     }
   }, true);
 
@@ -1425,11 +1426,11 @@
   }
   function readPad(p) {
     var map = customMap(p), out = {}, k;
-    var auto = map ? null : autoEntry(p);
+    var ae = autoEntry(p), auto = map ? null : ae, noDpad = !!map && map[BTN.UP] === undefined;
     var m = map || (auto && auto.m) || STD_MAP;
     for (k in m) if (tokenOn(p, m[k])) out[k] = true;
     // controle reconhecido pelo modelo: direcional no "hat" (no Linux/Tizen aparece nos últimos eixos)
-    if (auto && auto.h && p.axes.length >= 2) {
+    if ((auto || noDpad) && ae && ae.h && p.axes.length >= 2) {
       var hx = axisVal(p, p.axes.length - 2), hy = axisVal(p, p.axes.length - 1);
       if ((hx === -1 || hx === 0 || hx === 1) && (hy === -1 || hy === 0 || hy === 1)) {
         if (hx < 0) out[BTN.LEFT] = true; if (hx > 0) out[BTN.RIGHT] = true;
@@ -1443,7 +1444,7 @@
     if (!usesAxes) stickToDpad(out, axisVal(p, 0), axisVal(p, 1));
     // analógico direito também anda (controle padrão: eixos 2 e 3)
     if (!map && p.mapping === "standard" && p.axes.length >= 4) stickToDpad(out, axisVal(p, 2), axisVal(p, 3));
-    if (!map) {
+    if (!map || noDpad) {
       // controles "não padrão" (alguns PS4/genéricos por Bluetooth): direcional num eixo "hat"
       if (p.mapping !== "standard" && p.axes.length > 9) {
         var h = p.axes[9];
@@ -1455,8 +1456,8 @@
           if (dir >= 5 && dir <= 7) out[BTN.LEFT] = true;
         }
       }
-      if (!auto && tokenOn(p, "b7")) out.turbo = true;   // gatilho direito (RT/R2/ZR)
-      if (!auto && tokenOn(p, "b16")) out.menu = true;   // botão central (Xbox/PS/Home)
+      if (!map && !auto && tokenOn(p, "b7")) out.turbo = true;   // gatilho direito (RT/R2/ZR)
+      if (!map && !auto && tokenOn(p, "b16")) out.menu = true;   // botão central (Xbox/PS/Home)
     }
     return out;
   }
@@ -1671,64 +1672,74 @@
   var WIZ_ORDER = ["snes", "xbox", "ps", "switch", "generic"];
   var WIZ_POS = ["embaixo", "à direita", "à esquerda", "em cima", "ombro esquerdo", "ombro direito", "", ""];
   var WIZ_BTN = [BTN.B, BTN.A, BTN.Y, BTN.X, BTN.L, BTN.R, BTN.SELECT, BTN.START];
+  // peças do controle, na ordem da lista: [botão do SNES, índice do rótulo do modelo ou texto]
   var WIZ = [
-    [BTN.UP, "CIMA no direcional"], [BTN.DOWN, "BAIXO no direcional"],
-    [BTN.LEFT, "ESQUERDA no direcional"], [BTN.RIGHT, "DIREITA no direcional"],
+    [BTN.UP, "Cima (direcional)"], [BTN.DOWN, "Baixo (direcional)"],
+    [BTN.LEFT, "Esquerda (direcional)"], [BTN.RIGHT, "Direita (direcional)"],
     [BTN.B, 0], [BTN.A, 1], [BTN.Y, 2], [BTN.X, 3], [BTN.L, 4], [BTN.R, 5], [BTN.SELECT, 6], [BTN.START, 7]
   ];
+  var SNES_NAMES = ["B", "A", "Y", "X", "L", "R", "SELECT", "START"];
   function wizLabel(step) {
     if (typeof step[1] === "string") return step[1];
-    var m = WIZ_MODELS[wiz.model] || WIZ_MODELS.snes, i = step[1];
-    var name = m.k[i], pos = WIZ_POS[i];
-    return (i >= 6 ? name : "o botão " + name) + (pos ? " (" + pos + ")" : "") + (wiz.model !== "snes" ? " — vira o " + ["B", "A", "Y", "X", "L", "R", "SELECT", "START"][i] + " do SNES" : "");
+    var m = WIZ_MODELS[wiz.model] || WIZ_MODELS.snes, i = step[1], pos = WIZ_POS[i];
+    return m.k[i] + (pos ? " (" + pos + ")" : "");
   }
   function wizGuessModel(p) {
     var t = p ? padType(p) : "generic", au = p ? autoEntry(p) : null, id = String((p && p.id) || "") + " " + (au ? au.n : "");
     if (t === "xbox" || /xbox|x-box|360|xinput/i.test(id)) return "xbox";
     if (t === "ps" || /playstation|dualshock|ps[345]/i.test(id)) return "ps";
     if (/switch|joy-?con|pro controller|nintendo/i.test(id)) return "switch";
-    if (/8bitdo|snes|super famicom|retro/i.test(id)) return "snes";
     return "snes";
   }
-  function wizModel(d) {
-    var i = WIZ_ORDER.indexOf(wiz.model);
-    wiz.model = WIZ_ORDER[(i + d + WIZ_ORDER.length) % WIZ_ORDER.length];
-    paintWizard();
+  function tokName(t) {
+    if (!t) return "—";
+    var m = String(t).match(/^([ba])(\d+)([+-])?(?:=(-?[\d.]+))?$/);
+    if (!m) return t;
+    if (m[1] === "b") return "botão " + m[2];
+    return "eixo " + m[2] + (m[3] === "-" ? " ←/↑" : m[3] === "+" ? " →/↓" : m[4] ? " (" + m[4] + ")" : "");
   }
   var WIZ_PART = {}; // botão → id da peça no desenho
   WIZ_PART[BTN.UP] = "sp-up"; WIZ_PART[BTN.DOWN] = "sp-down"; WIZ_PART[BTN.LEFT] = "sp-left"; WIZ_PART[BTN.RIGHT] = "sp-right";
   WIZ_PART[BTN.B] = "sp-b"; WIZ_PART[BTN.A] = "sp-a"; WIZ_PART[BTN.Y] = "sp-y"; WIZ_PART[BTN.X] = "sp-x";
   WIZ_PART[BTN.L] = "sp-l"; WIZ_PART[BTN.R] = "sp-r"; WIZ_PART[BTN.SELECT] = "sp-select"; WIZ_PART[BTN.START] = "sp-start";
+  var WIZ_ACTS = [["save", "Salvar"], ["reset", "Voltar ao padrão"], ["cancel", "Cancelar"]];
   var wiz = null;
 
+  // Tela de configurar: escolha uma peça com as setas, aperte OK e depois aperte o botão no controle.
+  // Nada é configurado sozinho; só "Salvar" grava.
   function openWizard() {
     var pads = connectedPads();
     if (!pads.length) {
       toast("Nenhum joystick encontrado. Conecte por USB ou Bluetooth e aperte qualquer botão nele.", 4000);
       return;
     }
-    wiz = { step: 0, pad: null, padId: null, map: {}, rest: null, wait: true, model: wizGuessModel(pads[0]) };
+    var p = pads[0];
+    wiz = { pad: p.index, padId: p.id, padName: padName(p), model: wizGuessModel(p), focus: 1, capture: null, wait: true, rest: null, nav: {}, changed: false };
+    // começa com os botões que o controle já usa hoje
+    var cur = customMap(p), au = autoEntry(p), base = cur || (au && au.m) || (p.mapping === "standard" ? STD_MAP : {});
+    wiz.map = {};
+    for (var k in base) wiz.map[k] = base[k];
     state.view = "wizard";
     $("wizard").hidden = false;
     paintWizard();
   }
 
-  function closeWizard(saved) {
+  function closeWizard(msg) {
     $("wizard").hidden = true;
     state.view = "launcher";
     wiz = null;
     padPrev = {};
     state.padBadgeDirty = true;
-    if (!saved) toast("Configuração cancelada", 1600);
+    if (msg) toast(msg, 2200);
   }
 
+  // foco: 0 = modelos; 1..12 = peças; 13..15 = Salvar / Padrão / Cancelar
   function paintWizard(msg) {
-    var step = WIZ[wiz.step];
-    $("wiz-pad").textContent = wiz.padName ? wiz.padName : "Aperte o botão pedido no joystick que você quer configurar";
-    $("wiz-ask").textContent = step ? "Aperte " + wizLabel(step) : "";
-    // modelos (◀ ▶) e desenho com os nomes do modelo escolhido
-    var mb = $("wiz-models"), mm = WIZ_MODELS[wiz.model];
+    var mm = WIZ_MODELS[wiz.model];
+    $("wiz-pad").textContent = wiz.padName + (wiz.changed ? " · alterações não salvas" : "");
+    var mb = $("wiz-models");
     mb.innerHTML = "";
+    mb.classList.toggle("focus", wiz.focus === 0);
     WIZ_ORDER.forEach(function (k) {
       var sp = document.createElement("span");
       sp.textContent = WIZ_MODELS[k].n;
@@ -1737,15 +1748,79 @@
       mb.appendChild(sp);
     });
     ["b", "a", "y", "x", "l", "r", "select", "start"].forEach(function (id, i) { $("st-" + id).textContent = mm.k[i]; });
-    ["b", "a", "y", "x"].forEach(function (id, i) { $("sp-" + id).style.fill = wiz.map[WIZ_BTN[i]] !== undefined || (step && step[0] === WIZ_BTN[i]) ? "" : mm.c[i]; });
-    $("wiz-msg").textContent = msg || "";
-    $("wiz-progress").textContent = (wiz.step + 1) + " de " + WIZ.length;
+    var cur = wiz.focus >= 1 && wiz.focus <= WIZ.length ? WIZ[wiz.focus - 1][0] : null;
     Object.keys(WIZ_PART).forEach(function (b) {
       var el = document.getElementById(WIZ_PART[b]);
       if (!el) return;
-      el.classList.toggle("on", step && +b === step[0]);
-      el.classList.toggle("done", wiz.map[b] !== undefined);
+      el.classList.toggle("on", cur !== null && +b === cur);
+      el.classList.toggle("done", false);
     });
+    ["b", "a", "y", "x"].forEach(function (id, i) { $("sp-" + id).style.fill = cur === WIZ_BTN[i] ? "" : mm.c[i]; });
+    // lista de peças
+    var ul = $("wiz-list");
+    ul.innerHTML = "";
+    WIZ.forEach(function (st, i) {
+      var li = document.createElement("li");
+      if (wiz.focus === i + 1) li.className = wiz.capture !== null ? "focused capture" : "focused";
+      li.innerHTML = "<span></span><em></em><b></b>";
+      li.querySelector("span").textContent = wizLabel(st);
+      li.querySelector("em").textContent = typeof st[1] === "number" && wiz.model !== "snes" ? "= " + SNES_NAMES[st[1]] + " do SNES" : "";
+      li.querySelector("b").textContent = wiz.capture === st[0] ? "aperte…" : tokName(wiz.map[st[0]]);
+      li.addEventListener("click", function () { wiz.focus = i + 1; wizOk(); });
+      ul.appendChild(li);
+    });
+    var ab = $("wiz-acts");
+    ab.innerHTML = "";
+    WIZ_ACTS.forEach(function (a, i) {
+      var bt = document.createElement("button");
+      bt.type = "button";
+      bt.className = "fbtn" + (i === 0 ? " main" : "") + (wiz.focus === WIZ.length + 1 + i ? " focused" : "");
+      bt.textContent = a[1];
+      bt.addEventListener("click", function () { wiz.focus = WIZ.length + 1 + i; wizOk(); });
+      ab.appendChild(bt);
+    });
+    var ask = $("wiz-ask");
+    if (wiz.capture !== null) ask.textContent = "Agora aperte no controle: " + wizLabel(WIZ.filter(function (st) { return st[0] === wiz.capture; })[0]);
+    else if (wiz.focus === 0) ask.textContent = "◀ ▶ escolha o modelo do seu controle";
+    else if (cur !== null) ask.textContent = "OK para trocar o botão de " + wizLabel(WIZ[wiz.focus - 1]);
+    else ask.textContent = "";
+    ask.classList.toggle("capture", wiz.capture !== null);
+    $("wiz-msg").textContent = msg || "";
+    // mantém o item focado visível na lista
+    var fl = ul.children[wiz.focus - 1];
+    if (fl) { var box = ul; if (fl.offsetTop < box.scrollTop) box.scrollTop = fl.offsetTop; else if (fl.offsetTop + fl.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = fl.offsetTop + fl.offsetHeight - box.clientHeight; }
+  }
+
+  function wizMove(d) {
+    if (!wiz || wiz.capture !== null) return;
+    var max = WIZ.length + WIZ_ACTS.length;
+    wiz.focus = Math.max(0, Math.min(max, wiz.focus + d));
+    paintWizard();
+  }
+  function wizSide(d) {
+    if (!wiz || wiz.capture !== null) return;
+    if (wiz.focus === 0) { var i = WIZ_ORDER.indexOf(wiz.model); wiz.model = WIZ_ORDER[(i + d + WIZ_ORDER.length) % WIZ_ORDER.length]; paintWizard(); return; }
+    if (wiz.focus > WIZ.length) { wiz.focus = Math.max(WIZ.length + 1, Math.min(WIZ.length + WIZ_ACTS.length, wiz.focus + d)); paintWizard(); return; }
+    wizMove(d);
+  }
+  function wizOk() {
+    if (!wiz) return;
+    if (wiz.focus >= 1 && wiz.focus <= WIZ.length) {
+      wiz.capture = WIZ[wiz.focus - 1][0];
+      wiz.wait = true;            // espera soltar tudo antes de ler o botão novo
+      paintWizard();
+      return;
+    }
+    var act = wiz.focus > WIZ.length ? WIZ_ACTS[wiz.focus - WIZ.length - 1][0] : null;
+    if (act === "save") return wizardSave();
+    if (act === "reset") return wizardReset();
+    if (act === "cancel") return closeWizard(wiz.changed ? "Alterações descartadas" : "Nada foi alterado");
+  }
+  // VOLTAR: cancela a leitura do botão, ou fecha sem salvar
+  function wizBack() {
+    if (!wiz) return;
+    if (wiz.capture !== null) { wiz.capture = null; paintWizard("Troca cancelada"); return; }
+    closeWizard(wiz.changed ? "Alterações descartadas" : null);
   }
 
   function anyActive(p, rest) {
@@ -1756,57 +1831,62 @@
 
   function wizardPoll(pads) {
     if (!wiz) return;
-    var list = wiz.pad === null ? pads : pads.filter(function (p) { return p.index === wiz.pad; });
-    if (wiz.pad !== null && !list.length) { toast("O joystick foi desconectado"); closeWizard(true); return; }
+    var list = pads.filter(function (p) { return p.index === wiz.pad; });
+    if (!list.length) { closeWizard("O joystick foi desconectado"); return; }
+    var p = list[0];
     if (wiz.wait) {   // espera soltar tudo e guarda a posição de repouso dos eixos
-      var busy = list.some(function (p) { return anyActive(p, wiz.rest && wiz.rest[p.index]); });
-      if (!busy) {
-        wiz.wait = false;
-        wiz.rest = {};
-        list.forEach(function (p) { wiz.rest[p.index] = p.axes.slice(); });
-      }
+      if (!anyActive(p, wiz.rest)) { wiz.wait = false; wiz.rest = p.axes.slice(); }
       return;
     }
-    for (var n = 0; n < list.length; n++) {
-      var p = list[n], tok = null, i;
-      for (i = 0; i < p.buttons.length && !tok; i++) if (p.buttons[i].pressed || p.buttons[i].value > 0.5) tok = "b" + i;
-      var rest = wiz.rest[p.index] || [];
-      for (i = 0; i < p.axes.length && !tok; i++) {
-        var v = p.axes[i], r = rest[i] || 0;
-        if (Math.abs(v - r) > 0.5) {
-          tok = (Math.abs(v) > 0.9 && Math.abs(r) < 0.2) ? "a" + i + (v > 0 ? "+" : "-") : "a" + i + "=" + v.toFixed(2);
-        }
-      }
-      if (!tok) continue;
-      wiz.wait = true;
-      for (var b in wiz.map) if (wiz.map[b] === tok) { paintWizard("Esse botão já foi usado. Aperte outro."); return; }
-      wiz.pad = p.index; wiz.padId = p.id; wiz.padName = padName(p);
-      wiz.map[WIZ[wiz.step][0]] = tok;
-      advanceWizard();
+    if (wiz.capture === null) {
+      // navegando: o próprio joystick também anda pela tela (com os botões atuais)
+      var st = readPad(p), nav = wiz.nav;
+      var hit = function (k) { return st[k] && !nav[k]; };
+      if (hit(BTN.UP)) wizMove(-1);
+      else if (hit(BTN.DOWN)) wizMove(1);
+      else if (hit(BTN.LEFT)) wizSide(-1);
+      else if (hit(BTN.RIGHT)) wizSide(1);
+      else if (hit(BTN.B) || hit(BTN.A)) { wiz.nav = st; wizOk(); return; }
+      else if (hit(BTN.Y) || hit("menu")) { wiz.nav = st; wizBack(); return; }
+      wiz.nav = st;
       return;
     }
+    // lendo o botão novo para a peça escolhida
+    var tok = null, i;
+    for (i = 0; i < p.buttons.length && !tok; i++) if (p.buttons[i].pressed || p.buttons[i].value > 0.5) tok = "b" + i;
+    var rest = wiz.rest || [];
+    for (i = 0; i < p.axes.length && !tok; i++) {
+      var v = p.axes[i], r = rest[i] || 0;
+      if (Math.abs(v - r) > 0.5) tok = (Math.abs(v) > 0.9 && Math.abs(r) < 0.2) ? "a" + i + (v > 0 ? "+" : "-") : "a" + i + "=" + v.toFixed(2);
+    }
+    if (!tok) return;
+    // o mesmo botão em outra peça: tira de lá (troca)
+    var moved = "";
+    for (var b in wiz.map) if (wiz.map[b] === tok && +b !== wiz.capture) {
+      delete wiz.map[b];
+      WIZ.forEach(function (st2) { if (String(st2[0]) === b) moved = wizLabel(st2); });
+    }
+    wiz.map[wiz.capture] = tok;
+    wiz.capture = null;
+    wiz.changed = true;
+    wiz.wait = true;
+    wiz.nav = readPad(p);
+    if (wiz.focus < WIZ.length) wiz.focus++;          // já vai para a próxima peça (sem configurar sozinho)
+    paintWizard(moved ? "Esse botão estava em " + moved + " — troquei." : "Pronto! Escolha outra peça ou Salvar.");
   }
 
-  function advanceWizard() {
-    wiz.step++;
-    if (wiz.step < WIZ.length) { paintWizard(); return; }
-    if (!wiz.padId) { closeWizard(false); return; }
-    try { localStorage.setItem("snestv.pad." + wiz.padId, JSON.stringify(wiz.map)); } catch (e) {}
+  function wizardSave() {
+    try { localStorage.setItem(padMapKey({ id: wiz.padId }), JSON.stringify(wiz.map)); } catch (e) {}
     mapCache = {};
     // o modelo escolhido também vale para as dicas de botões na lateral
     if (/^(snes|xbox|ps)$/.test(wiz.model)) { try { localStorage.setItem("snestv.padmodel", wiz.model); } catch (e) {} }
-    toast("🎮 " + wiz.padName + " configurado (" + WIZ_MODELS[wiz.model].n + ")!", 2600);
-    closeWizard(true);
+    closeWizard("🎮 " + wiz.padName + " configurado (" + WIZ_MODELS[wiz.model].n + ")!");
   }
 
-  function wizardSkip() { if (wiz) { wiz.wait = true; advanceWizard(); } }
-
   function wizardReset() {
-    var pads = connectedPads();
-    var p = wiz && wiz.pad !== null ? pads.filter(function (x) { return x.index === wiz.pad; })[0] : pads[0];
+    try { localStorage.removeItem(padMapKey({ id: wiz.padId })); } catch (e) {}
     mapCache = {};
-    if (p) { try { localStorage.removeItem(padMapKey(p)); } catch (e) {} toast("Botões de " + padName(p) + " voltaram ao padrão", 2600); }
-    closeWizard(true);
+    closeWizard("Botões de " + wiz.padName + " voltaram ao padrão");
   }
 
   // ====================================================================

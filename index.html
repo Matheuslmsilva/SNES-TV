@@ -81,7 +81,7 @@
     <span><kbd class="k-arrow">◀ ▶ ▲ ▼</kbd> Escolher</span>
     <span><kbd>OK</kbd> Jogar</span>
     <span><kbd class="key-dot c-a"></kbd> Atualizar lista</span>
-    <span><kbd class="key-dot c-y"></kbd> Configurar joystick</span>
+    <span><kbd class="key-dot c-y"></kbd> Configurar controle</span>
     <span><kbd class="key-dot c-b"></kbd> Excluir</span>
     <span><kbd class="key-dot c-x"></kbd> Controles</span>
     <span><kbd>VOLTAR</kbd> Sair</span>
@@ -238,9 +238,10 @@
 <div id="wizard" class="overlay" hidden>
   <div class="panel wiz">
     <h2>Configurar controle</h2>
-    <div class="wiz-models" id="wiz-models"></div>
     <p id="wiz-pad" class="muted"></p>
-    <svg class="snes-pad" viewBox="0 0 420 200" aria-hidden="true">
+    <div class="wiz-models" id="wiz-models"></div>
+    <div class="wiz-body">
+      <svg class="snes-pad" viewBox="0 0 420 200" aria-hidden="true">
       <rect id="sp-l" class="part" x="40" y="12" width="110" height="26" rx="12"/>
       <rect id="sp-r" class="part" x="270" y="12" width="110" height="26" rx="12"/>
       <path class="body" d="M110 30h200a85 85 0 0 1 0 170H110a85 85 0 0 1 0-170z"/>
@@ -262,10 +263,12 @@
         <text id="st-select" x="182" y="152" class="sm">SELECT</text><text id="st-start" x="236" y="152" class="sm">START</text>
       </g>
     </svg>
+      <ul id="wiz-list" class="wiz-list"></ul>
+    </div>
     <p id="wiz-ask" class="wiz-ask"></p>
     <p id="wiz-msg" class="wiz-msg"></p>
-    <p class="muted small center"><span id="wiz-progress"></span> ·
-      <kbd>◀ ▶</kbd> modelo do controle · <kbd>OK</kbd> pular este botão · <kbd class="key-dot c-a"></kbd> voltar ao padrão · <kbd>VOLTAR</kbd> cancelar</p>
+    <div id="wiz-acts" class="form-btns wiz-acts"></div>
+    <p class="muted small center"><kbd>▲ ▼</kbd> escolher a peça · <kbd>OK</kbd> trocar o botão · <kbd>◀ ▶</kbd> modelo · <kbd class="key-dot c-a"></kbd> ou <kbd>VOLTAR</kbd> cancelar</p>
   </div>
 </div>
 
