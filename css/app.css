@@ -608,3 +608,23 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 .menu-col li b { color: #e8b71f; font-weight: 700; }
 .menu-col li.focused { background: #6c5fc7; color: #fff; }
 .menu-col li.focused b { color: #fff; }
+
+/* progresso das conquistas durante o jogo */
+.side-ach { margin: -0.4rem 0 1.2rem; padding-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.side-ach .sa-top { display: -webkit-flex; display: flex; -webkit-justify-content: space-between; justify-content: space-between; -webkit-align-items: baseline; align-items: baseline; font-size: 0.9rem; }
+.side-ach .sa-top b { color: #e8b71f; }
+.side-ach .sa-top span { color: #ece9f2; font-weight: 700; font-size: 0.85rem; }
+.side-ach .sa-bar { height: 0.55rem; margin-top: 0.4rem; border-radius: 0.3rem; background: rgba(255,255,255,0.1); overflow: hidden; }
+.side-ach .sa-bar i { display: block; height: 100%; width: 0; background: rgba(232,183,31,0.8); transition: width 0.6s; }
+.side-ach .sa-last { margin-top: 0.4rem; font-size: 0.78rem; color: #9a94a8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 4 espaços para salvar */
+.panel.slots-panel { width: 64rem; max-width: 92vw; text-align: center; }
+.slots-list { display: -webkit-flex; display: flex; -webkit-justify-content: center; justify-content: center; margin: 1rem 0 0.6rem; }
+.slot { width: 13rem; margin: 0 0.6rem; padding: 0.7rem; border-radius: 0.9rem; background: rgba(255,255,255,0.05); border: 3px solid transparent; cursor: pointer; }
+.slot .slot-img { height: 9.5rem; border-radius: 0.5rem; background: #0e0c12; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; color: #4a4458; font-weight: 800; font-size: 1.2rem; overflow: hidden; }
+.slot .slot-img img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+.slot b { display: block; margin-top: 0.6rem; font-size: 1.1rem; }
+.slot span { display: block; font-size: 0.85rem; color: #9a94a8; margin-top: 0.15rem; }
+.slot.focused { border-color: #b9adff; background: rgba(91,75,214,0.3); -webkit-transform: scale(1.04); transform: scale(1.04); }
+.slot.focused span { color: #e5e0ff; }

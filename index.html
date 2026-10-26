@@ -112,8 +112,8 @@
     <div id="menu-list" class="menu-cols">
       <div class="menu-col"><h3>Jogo</h3><ul>
         <li data-act="resume">▶ Continuar</li>
-        <li data-act="save">Salvar estado</li>
-        <li data-act="load">Carregar estado</li>
+        <li data-act="save">Salvar progresso (4 espaços)</li>
+        <li data-act="load">Carregar progresso</li>
         <li data-act="restart">Reiniciar o jogo</li>
         <li data-act="exit">Sair para a lista de jogos</li>
       </ul></div>
@@ -134,6 +134,16 @@
       </ul></div>
     </div>
     <p class="muted small center"><kbd>▲ ▼ ◀ ▶</kbd> escolher · <kbd>OK</kbd> confirmar · <kbd>VOLTAR</kbd> voltar ao jogo</p>
+  </div>
+</div>
+
+<!-- ============ ESPAÇOS PARA SALVAR ============ -->
+<div id="slots" class="overlay" hidden>
+  <div class="panel slots-panel">
+    <h2 id="slots-title">Salvar o progresso</h2>
+    <div id="slots-list" class="slots-list"></div>
+    <p id="slots-msg" class="muted center"></p>
+    <p class="muted small center"><kbd>◀ ▶</kbd> escolher o espaço · <kbd>OK</kbd> confirmar · <kbd>VOLTAR</kbd> voltar ao menu</p>
   </div>
 </div>
 

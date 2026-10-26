@@ -1076,6 +1076,79 @@
     focusEmu();
   }
 
+  // ---------------- 4 espaços para salvar o progresso (estados) ----------------
+  // espaço 1 usa a mesma chave de antes (estados já salvos continuam valendo)
+  function slotKey(base, n) { return n === 1 ? base : base + ":s" + n; }
+  function openSlots(mode, base) {
+    state.slots = { mode: mode, base: base, sel: 0, meta: [] };
+    state.view = "slots";
+    $("menu").hidden = true;
+    $("slots").hidden = false;
+    $("slots-title").textContent = mode === "save" ? "Salvar o progresso" : "Carregar o progresso";
+    paintSlots();
+    var jobs = [1, 2, 3, 4].map(function (n) {
+      return Promise.all([dbGet(slotKey(base, n) + ":meta")["catch"](function () { return null; }), dbGet(slotKey(base, n))["catch"](function () { return null; })])
+        .then(function (r) { return r[1] ? (r[0] || { t: 0 }) : null; });
+    });
+    Promise.all(jobs).then(function (m) { if (state.slots) { state.slots.meta = m; paintSlots(); } });
+  }
+  function paintSlots(msg) {
+    var sl = state.slots, box = $("slots-list");
+    box.innerHTML = "";
+    for (var n = 1; n <= 4; n++) {
+      var m = sl.meta[n - 1], d = document.createElement("div");
+      d.className = "slot" + (n - 1 === sl.sel ? " focused" : "") + (m ? "" : " empty");
+      d.innerHTML = '<div class="slot-img"></div><b></b><span></span>';
+      var im = d.querySelector(".slot-img");
+      if (m && m.img) { var img = document.createElement("img"); img.src = m.img; img.alt = ""; im.appendChild(img); }
+      else im.textContent = m ? "★" : "vazio";
+      d.querySelector("b").textContent = "Espaço " + n;
+      d.querySelector("span").textContent = m ? (m.t ? fmtDate(m.t) : "salvo") : (sl.mode === "save" ? "livre" : "nada salvo");
+      (function (i) { d.addEventListener("click", function () { sl.sel = i; slotOk(); }); })(n - 1);
+      box.appendChild(d);
+    }
+    $("slots-msg").textContent = msg || (sl.mode === "save" ? "Escolha onde salvar. Se o espaço já tiver algo, ele é substituído." : "Escolha qual progresso carregar.");
+  }
+  function fmtDate(t) {
+    var d = new Date(t), p2 = function (x) { return (x < 10 ? "0" : "") + x; };
+    return p2(d.getDate()) + "/" + p2(d.getMonth() + 1) + " " + p2(d.getHours()) + ":" + p2(d.getMinutes());
+  }
+  function slotMove(d) { var sl = state.slots; sl.sel = (sl.sel + d + 4) % 4; paintSlots(); }
+  function slotThumb() {
+    try {
+      var src = LITE && LITE.canvas ? LITE.canvas : document.querySelector("#player canvas");
+      if (!src) return null;
+      var c = document.createElement("canvas"); c.width = 160; c.height = 140;
+      c.getContext("2d").drawImage(src, 0, 0, 160, 140);
+      return c.toDataURL("image/jpeg", 0.72);
+    } catch (e) { return null; }
+  }
+  function slotOk() {
+    var sl = state.slots, n = sl.sel + 1, k = slotKey(sl.base, n);
+    if (sl.mode === "save") {
+      try {
+        var data = E.getState(), meta = { t: Date.now(), img: slotThumb() };
+        Promise.all([dbPut(k, data), dbPut(k + ":meta", meta)]).then(function () {
+          closeSlots(); closeMenu(); toast("Progresso salvo no espaço " + n);
+        }, function () { paintSlots("Não foi possível salvar."); });
+      } catch (e) { paintSlots("Não foi possível salvar."); }
+      return;
+    }
+    if (!sl.meta[sl.sel]) { paintSlots("Esse espaço está vazio."); return; }
+    dbGet(k).then(function (data) {
+      if (!data) { paintSlots("Esse espaço está vazio."); return; }
+      E.loadState(data);
+      closeSlots(); closeMenu(); toast("Progresso do espaço " + n + " carregado");
+    }, function () { paintSlots("Não foi possível carregar."); });
+  }
+  function closeSlots(back) {
+    $("slots").hidden = true;
+    state.slots = null;
+    state.view = "menu";
+    if (back) $("menu").hidden = false;
+    padPrev = {};
+  }
+
   // menu em colunas (paisagem): ▲ ▼ dentro da coluna, ◀ ▶ entre colunas
   function menuItems() { return $("menu-list").querySelectorAll("li"); }
   function menuPos(i) {
@@ -1114,23 +1187,7 @@
     if (LITE && LITE.net && /^(save|load|turbo|restart|engine|perf)$/.test(act)) {
       toast("Desativado no jogo online (as duas TVs precisam ficar iguais)", 3000); return;
     }
-    if (act === "save") {
-      try {
-        var data = E.getState();
-        dbPut(key, data).then(function () { toast("Estado salvo"); Conquistas.unlock("gen_save"); closeMenu(); },
-          function () { toast("Não foi possível salvar o estado"); });
-      } catch (e) { toast("Não foi possível salvar o estado"); }
-      return;
-    }
-    if (act === "load") {
-      dbGet(key).then(function (data) {
-        if (!data) { toast("Nenhum estado salvo para este jogo"); return; }
-        E.loadState(data);
-        toast("Estado carregado");
-        closeMenu();
-      }, function () { toast("Não foi possível carregar o estado"); });
-      return;
-    }
+    if (act === "save" || act === "load") { openSlots(act, key); return; }
     if (act === "turbo") {
       state.turbo = !state.turbo;
       E.turbo(state.turbo);
@@ -1305,6 +1362,11 @@
       else if (c === K.RIGHT) menuMove(1, 0);
       else if (c === K.ENTER) menuAction();
       else if (isBack(c)) closeMenu();
+    } else if (state.view === "slots") {
+      if (c === K.LEFT || c === K.UP) slotMove(-1);
+      else if (c === K.RIGHT || c === K.DOWN) slotMove(1);
+      else if (c === K.ENTER) slotOk();
+      else if (isBack(c) || c === K.RED) closeSlots(true);
     } else if (state.view === "help") {
       if (c === K.ENTER || isBack(c)) closeHelp();
     } else if (state.view === "phone") {
@@ -1701,11 +1763,28 @@
           if (down || right) driveMove(1);
           if (ok) driveAction();
           if (back) closeDrive();
-        } else if (state.view === "name") {
-          if (back && userName()) closeName();
-        } else if (state.view === "ra") {
-          if (back) closeRa();
-          if (hit(BTN.X) && RA.user()) raLogout();
+        } else if (state.view === "slots") {
+          if (left || up) slotMove(-1);
+          if (right || down) slotMove(1);
+          if (hit(BTN.B) || hit(BTN.START)) slotOk();
+          if (back || hit(BTN.A) || hit("menu")) closeSlots(true);
+        } else if (state.view === "name" || state.view === "ra" || (state.view === "net" && state.netMode === "join")) {
+          // telas com campo de texto e botões: o joystick anda entre eles; baixo = OK, direita/esquerda = voltar
+          var ids = state.view === "name" ? ["name-input", "name-ok", "name-back"] : state.view === "ra" ? ["ra-user", "ra-pass", "ra-ok", "ra-out", "ra-back"] : ["net-code", "net-join-ok", "net-join-back"];
+          var items = ids.map($).filter(function (el) { return el && !el.hidden && el.offsetParent !== null; });
+          var cur = items.indexOf(document.activeElement);
+          if (down || right) { var nx = items[Math.min(items.length - 1, cur + 1)]; if (nx) nx.focus(); }
+          if (up || left) { var pv = items[Math.max(0, cur - 1)]; if (pv) pv.focus(); }
+          if (hit(BTN.B) || hit(BTN.START)) {
+            var a = document.activeElement;
+            if (a && a.tagName === "BUTTON") a.click();
+            else if (cur < 0 && items[0]) items[0].focus();
+          }
+          if (back || hit(BTN.A) || hit("menu")) {
+            if (state.view === "name") { if (userName()) closeName(); }
+            else if (state.view === "ra") closeRa();
+            else { netEnd(); netShow("home"); }
+          }
         } else if (state.view === "ach") {
           if (hit(BTN.X) || ok) openRa("ach");
           else if (back) closeAch();
@@ -2872,7 +2951,8 @@
     if (!window.RA || !RA.user() || !state.games || !state.games.length) return;
     var fl = window.fflate ? Promise.resolve() : loadScript("lib/fflate.js");
     fl.then(function () {
-      RA.scan(state.games, gameKey, function (g) { return bytesOf(g).then(romOf); });
+      // só os jogos que estão na TV/pen drive/PC (os do Drive entram depois de baixados)
+      RA.scan(state.games.filter(function (g) { return g.source !== "drive"; }), gameKey, function (g) { return bytesOf(g).then(romOf); });
     });
   }
 
@@ -3433,7 +3513,7 @@
   function buildSideHelp(g, rom) {
     var key = helpKeyFor(g, rom), h = key && GAME_HELP[key] ? GAME_HELP[key] : GENERIC_HELP;
     var L = $("side-left"), R = $("side-right");
-    var html = '<div id="side-players" class="side-players"></div><div class="side-h">Botões</div><div class="side-game"></div><ul class="side-list">';
+    var html = '<div id="side-players" class="side-players"></div><div id="side-ach" class="side-ach" hidden></div><div class="side-h">Botões</div><div class="side-game"></div><ul class="side-list">';
     h.rows.forEach(function () { html += "<li><span></span><em></em></li>"; });
     html += "</ul>";
     L.innerHTML = html;
@@ -3444,6 +3524,7 @@
       lis[i].querySelector("em").textContent = r[1];
     });
     paintPlayers();
+    paintSideAch();
 
     var pads = connectedPads(), pt = pads.length ? padType(pads[0]) : (ctrl.skins && ctrl.conns[0] && ctrl.skins[0]) || null;
     if (pt === "generic") pt = "snes";
@@ -3467,6 +3548,21 @@
       if (r[1] === "Direcional" || r[1] === "Menu do jogo" || r[1] === "Turbo") span.innerHTML += "<small>" + r[1] + "</small>";
     });
     fitPlayer();
+  }
+
+  // progresso das conquistas da comunidade do jogo aberto (faixa esquerda)
+  function paintSideAch() {
+    var box = $("side-ach");
+    if (!box) return;
+    var g = state.current, r = g && window.RA ? RA.info(gameKey(g)) : null;
+    if (!r || !r.total) { box.hidden = true; return; }
+    var got = Math.min(r.unlocked || 0, r.total), pct = Math.round(got / r.total * 100);
+    box.hidden = false;
+    box.innerHTML = '<div class="sa-top"><b>🏆 Conquistas</b><span></span></div><div class="sa-bar"><i></i></div><div class="sa-last"></div>';
+    box.querySelector("span").textContent = got + "/" + r.total + " · " + pct + "%";
+    box.querySelector("i").style.width = pct + "%";
+    var last = (r.list || []).filter(function (a) { return a.u; }).slice(-1)[0];
+    box.querySelector(".sa-last").textContent = last ? "Última: " + last.t : "Nenhuma ainda — boa sorte!";
   }
 
   // quem é cada jogador (topo da faixa esquerda) e, no jogo online, o ping
@@ -3649,6 +3745,7 @@
     if (window.RA) {
       RA.onEvent = raEvent;
       RA.onUpdate = function () {
+        if (state.view === "game" || state.view === "menu") { paintSideAch(); return; }
         if (state.view !== "launcher" || !state.items) return;
         paintBars();
         detKey = null; setFocus();
