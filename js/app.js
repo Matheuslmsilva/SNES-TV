@@ -1713,15 +1713,31 @@
       toast("Nenhum joystick encontrado. Conecte por USB ou Bluetooth e aperte qualquer botão nele.", 4000);
       return;
     }
-    var p = pads[0];
-    wiz = { pad: p.index, padId: p.id, padName: padName(p), model: wizGuessModel(p), focus: 1, capture: null, wait: true, rest: null, nav: {}, changed: false };
+    wiz = { focus: 1, capture: null, wait: true, rest: null, nav: {}, changed: false, others: {} };
+    wizSelectPad(pads[0]);
+    state.view = "wizard";
+    $("wizard").hidden = false;
+    paintWizard();
+  }
+
+  // escolhe qual controle (1 a 4) está sendo configurado
+  function wizSelectPad(p) {
+    wiz.pad = p.index; wiz.padId = p.id; wiz.padName = padName(p); wiz.model = wizGuessModel(p);
+    wiz.capture = null; wiz.wait = true; wiz.rest = null; wiz.nav = {}; wiz.changed = false;
     // começa com os botões que o controle já usa hoje
     var cur = customMap(p), au = autoEntry(p), base = cur || (au && au.m) || (p.mapping === "standard" ? STD_MAP : {});
     wiz.map = {};
     for (var k in base) wiz.map[k] = base[k];
-    state.view = "wizard";
-    $("wizard").hidden = false;
-    paintWizard();
+  }
+  function wizPadSlot(d) {
+    var pads = connectedPads().slice(0, 4);
+    if (pads.length < 2) { paintWizard("Só há 1 controle conectado. Ligue outro e aperte um botão nele."); return; }
+    var i = 0;
+    pads.forEach(function (p, n) { if (p.index === wiz.pad) i = n; });
+    var np = pads[(i + d + pads.length) % pads.length];
+    var lost = wiz.changed;
+    wizSelectPad(np);
+    paintWizard((lost ? "Alterações do controle anterior descartadas. " : "") + "Configurando o controle " + (pads.indexOf(np) + 1) + ".");
   }
 
   function closeWizard(msg) {
@@ -1736,6 +1752,18 @@
   // foco: 0 = modelos; 1..12 = peças; 13..15 = Salvar / Padrão / Cancelar
   function paintWizard(msg) {
     var mm = WIZ_MODELS[wiz.model];
+    var pr = $("wiz-pads"), plist = connectedPads().slice(0, 4);
+    pr.innerHTML = "";
+    pr.classList.toggle("focus", wiz.focus === -1);
+    for (var n = 0; n < 4; n++) {
+      var pp = plist[n], ch = document.createElement("span");
+      ch.className = "pchip" + (pp ? " con" : "") + (pp && pp.index === wiz.pad ? " on" : "");
+      ch.innerHTML = "<b></b><small></small>";
+      ch.querySelector("b").textContent = "Controle " + (n + 1);
+      ch.querySelector("small").textContent = pp ? "● conectado · " + padName(pp) : "○ desconectado";
+      if (pp) (function (q) { ch.addEventListener("click", function () { wizSelectPad(q); paintWizard(); }); })(pp);
+      pr.appendChild(ch);
+    }
     $("wiz-pad").textContent = wiz.padName + (wiz.changed ? " · alterações não salvas" : "");
     var mb = $("wiz-models");
     mb.innerHTML = "";
@@ -1782,6 +1810,7 @@
     var ask = $("wiz-ask");
     if (wiz.capture !== null) ask.textContent = "Agora aperte no controle: " + wizLabel(WIZ.filter(function (st) { return st[0] === wiz.capture; })[0]);
     else if (wiz.focus === 0) ask.textContent = "◀ ▶ escolha o modelo do seu controle";
+    else if (wiz.focus === -1) ask.textContent = "◀ ▶ escolha qual controle configurar (ou aperte um botão nele)";
     else if (cur !== null) ask.textContent = "OK para trocar o botão de " + wizLabel(WIZ[wiz.focus - 1]);
     else ask.textContent = "";
     ask.classList.toggle("capture", wiz.capture !== null);
@@ -1794,11 +1823,12 @@
   function wizMove(d) {
     if (!wiz || wiz.capture !== null) return;
     var max = WIZ.length + WIZ_ACTS.length;
-    wiz.focus = Math.max(0, Math.min(max, wiz.focus + d));
+    wiz.focus = Math.max(-1, Math.min(max, wiz.focus + d));
     paintWizard();
   }
   function wizSide(d) {
     if (!wiz || wiz.capture !== null) return;
+    if (wiz.focus === -1) { wizPadSlot(d); return; }
     if (wiz.focus === 0) { var i = WIZ_ORDER.indexOf(wiz.model); wiz.model = WIZ_ORDER[(i + d + WIZ_ORDER.length) % WIZ_ORDER.length]; paintWizard(); return; }
     if (wiz.focus > WIZ.length) { wiz.focus = Math.max(WIZ.length + 1, Math.min(WIZ.length + WIZ_ACTS.length, wiz.focus + d)); paintWizard(); return; }
     wizMove(d);
@@ -1832,8 +1862,25 @@
   function wizardPoll(pads) {
     if (!wiz) return;
     var list = pads.filter(function (p) { return p.index === wiz.pad; });
-    if (!list.length) { closeWizard("O joystick foi desconectado"); return; }
+    if (!list.length) {
+      if (!pads.length) { closeWizard("O joystick foi desconectado"); return; }
+      wizSelectPad(pads[0]); paintWizard("O controle foi desconectado. Configurando o controle 1."); return;
+    }
     var p = list[0];
+    // a lista de controles conectados mudou: atualiza as abas
+    var sig = pads.map(function (q) { return q.index; }).join(",");
+    if (sig !== wiz.sig) { wiz.sig = sig; if (wiz.capture === null) paintWizard(); }
+    // apertou um botão em outro controle (fora da leitura): passa a configurar aquele
+    if (wiz.capture === null) {
+      for (var o = 0; o < pads.length && o < 4; o++) {
+        var q = pads[o];
+        if (q.index === wiz.pad) continue;
+        var act = false;
+        for (var bi = 0; bi < q.buttons.length; bi++) if (q.buttons[bi].pressed) act = true;
+        if (act && !wiz.others[q.index]) { wiz.others[q.index] = true; wizSelectPad(q); paintWizard("Configurando o controle " + (o + 1) + " (" + padName(q) + ")."); return; }
+        if (!act) wiz.others[q.index] = false;
+      }
+    }
     if (wiz.wait) {   // espera soltar tudo e guarda a posição de repouso dos eixos
       if (!anyActive(p, wiz.rest)) { wiz.wait = false; wiz.rest = p.axes.slice(); }
       return;

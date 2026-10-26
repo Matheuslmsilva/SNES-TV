@@ -544,3 +544,13 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 .wiz-ask { font-size: 1.25rem; min-height: 1.6rem; }
 .wiz-ask.capture { color: #e8b71f; }
 .wiz-acts .fbtn.focused { border-color: #fff; box-shadow: 0 0 0 0.3rem rgba(185,173,255,0.45); -webkit-transform: scale(1.06); transform: scale(1.06); }
+.wiz-pads { display: -webkit-flex; display: flex; -webkit-justify-content: center; justify-content: center; margin-top: 0.4rem; }
+.wiz-pads .pchip { display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; -webkit-align-items: flex-start; align-items: flex-start; min-width: 12rem; max-width: 14rem; padding: 0.45rem 0.9rem; margin: 0 0.25rem;
+  border-radius: 0.7rem; background: rgba(255,255,255,0.04); border: 2px solid transparent; color: #6f6a7d; text-align: left; cursor: default; }
+.wiz-pads .pchip b { font-size: 1rem; }
+.wiz-pads .pchip small { font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.wiz-pads .pchip.con { color: #ece9f2; cursor: pointer; background: rgba(255,255,255,0.07); }
+.wiz-pads .pchip.con small { color: #5fe08a; }
+.wiz-pads .pchip.on { background: #5b4bd6; border-color: #b9adff; }
+.wiz-pads .pchip.on small { color: #e5e0ff; }
+.wiz-pads.focus .pchip.on { box-shadow: 0 0 0 0.25rem rgba(185,173,255,0.45); }
