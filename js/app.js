@@ -1056,7 +1056,8 @@
     E.pause();
     state.view = "menu";
     state.menuFocus = 0;
-    $("menu-title").textContent = state.current ? state.current.title : "Pausado";
+    var mcn = state.current ? coverName(state.current) : null;
+    $("menu-title").textContent = state.current ? (mcn ? cleanTitle(mcn).title : state.current.title) : "Pausado";
     $("turbo-state").textContent = state.turbo ? "ligada" : "desligada";
     $("perf-state").textContent = LITE ? "automático" : PERF_NAMES[perfMode()];
     $("engine-state").textContent = ENGINE_NAMES[LITE ? "lite" : "ejs"];
@@ -1075,13 +1076,39 @@
     focusEmu();
   }
 
+  // menu em colunas (paisagem): ▲ ▼ dentro da coluna, ◀ ▶ entre colunas
+  function menuItems() { return $("menu-list").querySelectorAll("li"); }
+  function menuPos(i) {
+    var cols = $("menu-list").querySelectorAll(".menu-col ul"), k = 0;
+    for (var c = 0; c < cols.length; c++) {
+      var n = cols[c].children.length;
+      if (i < k + n) return { c: c, r: i - k, cols: cols };
+      k += n;
+    }
+    return { c: 0, r: 0, cols: cols };
+  }
+  function menuMove(dx, dy) {
+    var pos = menuPos(state.menuFocus), cols = pos.cols, c = pos.c, r = pos.r;
+    if (dy) {
+      var n = cols[c].children.length;
+      r = (r + dy + n) % n;
+    }
+    if (dx) {
+      c = (c + dx + cols.length) % cols.length;
+      r = Math.min(r, cols[c].children.length - 1);
+    }
+    var idx = 0;
+    for (var j = 0; j < c; j++) idx += cols[j].children.length;
+    state.menuFocus = idx + r;
+    paintMenu();
+  }
   function paintMenu() {
-    var items = $("menu-list").children;
+    var items = menuItems();
     for (var i = 0; i < items.length; i++) items[i].classList.toggle("focused", i === state.menuFocus);
   }
 
   function menuAction() {
-    var act = $("menu-list").children[state.menuFocus].getAttribute("data-act");
+    var act = menuItems()[state.menuFocus].getAttribute("data-act");
     var key = (LITE ? "state2005:" : "state:") + gameKey(state.current);
     if (act === "resume") return closeMenu();
     if (LITE && LITE.net && /^(save|load|turbo|restart|engine|perf)$/.test(act)) {
@@ -1272,9 +1299,10 @@
         else quitApp();
       }
     } else if (state.view === "menu") {
-      var n = $("menu-list").children.length;
-      if (c === K.UP) { state.menuFocus = (state.menuFocus + n - 1) % n; paintMenu(); }
-      else if (c === K.DOWN) { state.menuFocus = (state.menuFocus + 1) % n; paintMenu(); }
+      if (c === K.UP) menuMove(0, -1);
+      else if (c === K.DOWN) menuMove(0, 1);
+      else if (c === K.LEFT) menuMove(-1, 0);
+      else if (c === K.RIGHT) menuMove(1, 0);
       else if (c === K.ENTER) menuAction();
       else if (isBack(c)) closeMenu();
     } else if (state.view === "help") {
@@ -1633,9 +1661,10 @@
             }
           }
         } else if (state.view === "menu") {
-          var n = $("menu-list").children.length;
-          if (up) { state.menuFocus = (state.menuFocus + n - 1) % n; paintMenu(); }
-          if (down) { state.menuFocus = (state.menuFocus + 1) % n; paintMenu(); }
+          if (up) menuMove(0, -1);
+          if (down) menuMove(0, 1);
+          if (left) menuMove(-1, 0);
+          if (right) menuMove(1, 0);
           if (hit(BTN.B) || hit(BTN.A)) menuAction();
           if (back || hit("menu")) closeMenu();
         } else if (state.view === "help") {

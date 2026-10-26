@@ -594,3 +594,17 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 .hints kbd.pad-face.ps { background: #1f2126 !important; font-size: 1.05rem; }
 .hints kbd.pad-pill { border-radius: 0.8rem; padding: 0.1rem 0.6rem; font-size: 0.8rem; font-weight: 800; }
 .ra-card .ra-btn { background: #5b4bd6; color: #fff; font-weight: 800; padding: 0.5rem 1rem; border-radius: 0.6rem; border: 2px solid #b9adff; }
+
+/* menu do jogo em paisagem: três colunas */
+.panel.menu-panel { width: 72rem; max-width: 92vw; padding: 1.4rem 2rem 1rem; }
+.menu-head { display: -webkit-flex; display: flex; -webkit-align-items: baseline; align-items: baseline; -webkit-justify-content: space-between; justify-content: space-between; margin-bottom: 0.6rem; }
+.menu-head h2 { margin: 0; }
+.menu-cols { display: -webkit-flex; display: flex; margin: 0 0 0.6rem; }
+.menu-col { -webkit-flex: 1; flex: 1; min-width: 0; }
+.menu-col + .menu-col { margin-left: 1.2rem; padding-left: 1.2rem; border-left: 1px solid rgba(255,255,255,0.07); }
+.menu-col h3 { margin: 0.2rem 0 0.5rem; font-size: 0.9rem; letter-spacing: 0.14em; text-transform: uppercase; color: #9a94a8; }
+.menu-col ul { list-style: none; margin: 0; padding: 0; }
+.menu-col li { font-size: 1.08rem; padding: 0.55rem 0.9rem; border-radius: 0.55rem; margin: 0.15rem 0; color: #cbc6d6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menu-col li b { color: #e8b71f; font-weight: 700; }
+.menu-col li.focused { background: #6c5fc7; color: #fff; }
+.menu-col li.focused b { color: #fff; }

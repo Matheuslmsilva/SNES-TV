@@ -107,27 +107,33 @@
 
 <!-- ============ MENU DURANTE O JOGO ============ -->
 <div id="menu" class="overlay" hidden>
-  <div class="panel">
-    <h2 id="menu-title">Pausado</h2>
-    <ul id="menu-list" class="menu-list">
-      <li data-act="resume">Continuar</li>
-      <li data-act="save">Salvar estado</li>
-      <li data-act="load">Carregar estado</li>
-      <li data-act="turbo">Velocidade turbo: <b id="turbo-state">desligada</b></li>
-      <li data-act="engine">Emulador: <b id="engine-state">TV antiga (leve)</b></li>
-      <li data-act="padmodel">Modelo do controle: <b id="padmodel-state">automático</b></li>
-      <li data-act="side">Dicas de botões na lateral: <b id="side-state">sim</b></li>
-      <li data-act="crt">Filtro TV de tubo: <b id="crt-state">ligado</b></li>
-      <li data-act="perf">Desempenho: <b id="perf-state">velocidade máxima</b></li>
-      <li data-act="fps">Mostrar FPS: <b id="fps-state">não</b></li>
-      <li data-act="restart">Reiniciar o jogo</li>
-      <li data-act="ach">Conquistas</li>
-      <li data-act="invite">Convidar amigo para jogar online</li>
-      <li data-act="pair">Celular como controle</li>
-      <li data-act="controls">Ver controles</li>
-      <li data-act="exit">Sair para a lista de jogos</li>
-    </ul>
-    <p class="muted small">O progresso salvo dentro do próprio jogo (bateria) é guardado automaticamente.</p>
+  <div class="panel menu-panel">
+    <div class="menu-head"><h2 id="menu-title">Pausado</h2><span class="muted small">O progresso salvo dentro do jogo (bateria) é guardado sozinho.</span></div>
+    <div id="menu-list" class="menu-cols">
+      <div class="menu-col"><h3>Jogo</h3><ul>
+        <li data-act="resume">▶ Continuar</li>
+        <li data-act="save">Salvar estado</li>
+        <li data-act="load">Carregar estado</li>
+        <li data-act="restart">Reiniciar o jogo</li>
+        <li data-act="exit">Sair para a lista de jogos</li>
+      </ul></div>
+      <div class="menu-col"><h3>Jogar junto</h3><ul>
+        <li data-act="invite">Convidar amigo (online)</li>
+        <li data-act="pair">Celular como controle</li>
+        <li data-act="controls">Ver controles</li>
+        <li data-act="ach">Conquistas</li>
+        <li data-act="turbo">Turbo: <b id="turbo-state">desligada</b></li>
+      </ul></div>
+      <div class="menu-col"><h3>Ajustes</h3><ul>
+        <li data-act="engine">Emulador: <b id="engine-state">TV antiga (leve)</b></li>
+        <li data-act="padmodel">Controle: <b id="padmodel-state">automático</b></li>
+        <li data-act="side">Dicas na lateral: <b id="side-state">sim</b></li>
+        <li data-act="crt">TV de tubo: <b id="crt-state">ligado</b></li>
+        <li data-act="perf">Desempenho: <b id="perf-state">velocidade máxima</b></li>
+        <li data-act="fps">Mostrar FPS: <b id="fps-state">não</b></li>
+      </ul></div>
+    </div>
+    <p class="muted small center"><kbd>▲ ▼ ◀ ▶</kbd> escolher · <kbd>OK</kbd> confirmar · <kbd>VOLTAR</kbd> voltar ao jogo</p>
   </div>
 </div>
 
