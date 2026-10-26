@@ -412,7 +412,7 @@
     pad: "Joystick com botões trocados? Siga a tela apertando cada botão pedido. Fica salvo para aquele modelo.",
     pair: "Transforme o celular num controle de Super Nintendo. Até 4 celulares, um para cada jogador.",
     net: "Jogue com um amigo em outra TV, pela internet, com um código.",
-    ach: "Conquistas do SNES TV e da comunidade (RetroAchievements)."
+    ach: "Conquistas feitas pela comunidade do RetroAchievements para os seus jogos. Conecte a sua conta uma vez e elas ficam salvas."
   };
   function sideItems() {
     var tvBrowser = /SMART-TV|Tizen|Web0S|NetCast|HbbTV/i.test(navigator.userAgent);
@@ -855,7 +855,7 @@
       startAchTimer();
       if (window.RA && RA.user()) RA.attach(LITE, LITE.rom, gameKey(g));
       if (net) { netOnLiteReady(); return; }
-      if (Conquistas.game) toast("★ Conquistas de " + Conquistas.games[Conquistas.game].name + " ativas", 2600);
+
     }).catch(function (e) {
       console.error(e);
       if (net) { fail("Não foi possível abrir o jogo online."); return; }
@@ -2419,7 +2419,9 @@
     state.view = "ach";
     $("menu").hidden = true;
     $("ach").hidden = false;
-    $("ach-count").textContent = "★ " + Conquistas.count() + " de " + Conquistas.total();
+    var raTot = 0, raGot = 0;
+    if (window.RA && RA.user() && state.games) state.games.forEach(function (g) { var r = RA.info(gameKey(g)); if (r && r.total) { raTot += r.total; raGot += Math.min(r.unlocked || 0, r.total); } });
+    $("ach-count").textContent = raTot ? "★ " + raGot + " de " + raTot : "";
     var html = '<div class="ach-inner" id="ach-inner">';
     // conquistas da comunidade (RetroAchievements)
     var raU = window.RA && RA.user(), raSets = [];
@@ -2437,32 +2439,10 @@
         html += '</div>';
       });
     }
-    var order = ["gen", "smw", "alttp", "sm", "smk"];
-    // jogo atual primeiro
-    if (state.view === "ach" && from === "menu" && Conquistas.game) {
-      order = [Conquistas.game].concat(order.filter(function (g) { return g !== Conquistas.game; }));
-    }
-    order.forEach(function (g) {
-      var list = Conquistas.defs.filter(function (d) { return d.g === g; });
-      var got = list.filter(function (d) { return Conquistas.isUnlocked(d.id); }).length;
-      html += '<div class="ach-group">' + Conquistas.groups[g] + ' — ' + got + '/' + list.length + '</div><div class="ach-grid">';
-      list.forEach(function (d) {
-        var on = Conquistas.isUnlocked(d.id);
-        html += '<div class="ach-item' + (on ? ' on' : '') + '"><i>' + (on ? '★' : '☆') + '</i><div><b></b><span></span></div></div>';
-      });
-      html += '</div>';
-    });
+    if (raU && !raSets.length) html += '<p class="muted center ach-empty">Nenhum jogo da sua lista tem conquistas da comunidade ainda (ou a busca ainda está acontecendo).</p>';
+    if (!raU) html += '<p class="muted center ach-empty">Conecte a sua conta para ver e ganhar as conquistas dos seus jogos.</p>';
     html += '</div>';
     $("ach-list").innerHTML = html;
-    // textos com textContent (seguro)
-    var items = $("ach-list").querySelectorAll(".ach-item"), k = 0;
-    order.forEach(function (g) {
-      Conquistas.defs.filter(function (d) { return d.g === g; }).forEach(function (d) {
-        items[k].querySelector("b").textContent = d.t;
-        items[k].querySelector("span").textContent = d.d;
-        k++;
-      });
-    });
     var card = $("ach-list").querySelector(".ra-card");
     card.querySelector(".ra-h").textContent = raU ? "RetroAchievements · " + raU.name : "Conquistas da comunidade (RetroAchievements)";
     card.querySelector(".ra-s").textContent = raU ?
@@ -2623,7 +2603,7 @@
   var ACTION_INFO = {
     phone: "Mande jogos do celular para a TV: leia o QR Code com a câmera, escolha os arquivos .sfc, .smc ou .zip e eles ficam salvos aqui.",
     pair: "Transforme o celular num controle de Super Nintendo. Até 4 celulares, um para cada jogador. Eles se reconectam sozinhos.",
-    ach: "Todas as conquistas num lugar só: as gerais, que valem para qualquer jogo, e as de Super Mario World, Zelda, Super Metroid e Super Mario Kart.",
+    ach: "Conquistas feitas pela comunidade do RetroAchievements para os seus jogos.",
     open: "Escolha arquivos .sfc, .smc ou .zip deste aparelho. Eles ficam salvos para a próxima vez.",
     drive: "Conecte o seu Google Drive: os jogos de SNES de lá (.sfc, .smc e .zip com nome de jogo) aparecem nesta lista. Ao jogar, o jogo é baixado do Drive e uma cópia fica salva na TV.",
     net: "Jogue com um amigo em outra TV, pela internet. Uma TV cria a partida e recebe um código; a outra entra com esse código. As duas precisam ter o mesmo arquivo do jogo."
@@ -2673,21 +2653,11 @@
     var gk = g.action ? null : Conquistas.gameFor(cn, g.title, g.name);
     var ra = !g.action && window.RA ? RA.info(gameKey(g)) : null;
     var list = [], head, note = "";
-    function local(defs) { return defs.map(function (d) { return { t: d.t, d: d.d, on: Conquistas.isUnlocked(d.id) }; }); }
-    if (g.action === "ach") { list = local(Conquistas.defs); head = "Conquistas do SNES TV"; }
-    else if (!g.action) {
-      if (ra) {
-        (ra.list || []).forEach(function (a) { list.push({ t: a.t, d: a.d, on: !!a.u, img: a.u ? a.b : a.bl, p: a.p, m: a.m }); });
-        head = "Conquistas da comunidade";
-      }
-      if (gk) { list = list.concat(local(Conquistas.listFor(gk))); head = head || "Conquistas do jogo"; }
-      if (!list.length) {
-        list = local(Conquistas.listFor("gen")); head = "Conquistas gerais";
-        note = window.RA && !RA.user() ? "Entre no RetroAchievements (menu Conquistas → VERDE) para ver as conquistas que a comunidade fez para este jogo. As gerais valem para todos:" :
-          window.RA && RA.known(gameKey(g)) ? "A comunidade ainda não fez conquistas para este jogo. As gerais valem para todos:" :
-          "Este jogo ainda não tem conquistas próprias. As gerais valem para todos:";
-      }
-    } else list = null;
+    if (!g.action && ra) {
+      (ra.list || []).forEach(function (a) { list.push({ t: a.t, d: a.d, on: !!a.u, img: a.u ? a.b : a.bl, p: a.p, m: a.m }); });
+      head = "Conquistas";
+      if (!list.length && ra.total) list = [{ t: "", d: "", on: false }];
+    } else list = null;   // sem conquistas da comunidade: não mostra nada
 
     $("det-ach-box").hidden = !list;
     var ul = $("det-ach");
@@ -2696,7 +2666,7 @@
     var pr = !g.action ? achProgress(g) : null;
     var got = list.filter(function (d) { return d.on; }).length, total = list.length;
     // o servidor pode saber de desbloqueios que a lista guardada ainda não tem
-    if (pr && pr.total && list.length && head !== "Conquistas gerais") { got = Math.max(got, pr.got); total = Math.max(total, pr.total); }
+    if (pr && pr.total) { got = Math.max(got, pr.got); total = Math.max(total, pr.total); }
     $("det-ach-title").textContent = g.action ? head : (head === "Conquistas gerais" ? "Conquistas gerais" : "Conquistas");
     $("det-ach-count").textContent = "★ " + got + "/" + total;
     $("det-bar").style.width = Math.round(got / Math.max(1, total) * 100) + "%";
@@ -2802,13 +2772,7 @@
     if (!g || g.action) return null;
     var got = 0, total = 0, ra = window.RA ? RA.info(gameKey(g)) : null;
     if (ra && ra.total) { total += ra.total; got += Math.min(ra.unlocked || 0, ra.total); }
-    var cn = coverName(g), gk = Conquistas.gameFor(cn, g.title, g.name);
-    if (gk) {
-      var l = Conquistas.listFor(gk);
-      total += l.length;
-      got += l.filter(function (d) { return Conquistas.isUnlocked(d.id); }).length;
-    }
-    return total ? { got: got, total: total, ra: !!ra } : null;
+    return total ? { got: got, total: total, ra: true } : null;
   }
   // barra transparente embaixo de cada cartucho
   function paintBar(el, g) {
@@ -3648,7 +3612,7 @@
   // ====================================================================
   function init() {
     registerTvKeys();
-    Conquistas.onUnlock = showAch;
+    Conquistas.onUnlock = null;   // só as conquistas do RetroAchievements aparecem
     if (window.Drive) {
       var baseSnes = Drive.looksSnes;
       Drive.looksSnes = function (n) { return baseSnes(n) || !!findCover(cleanTitle(n).title); };
