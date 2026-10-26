@@ -11,7 +11,7 @@
 
   var ROM_EXT = /\.(sfc|smc|swc|fig|zip|7z)$/i;
   var IS_TIZEN = typeof window.tizen !== "undefined" && !!window.tizen.filesystem;
-  var COLS = 3;
+  var COLS = 5;
 
   // Teclas do controle remoto Samsung
   var K = {
@@ -560,7 +560,7 @@
       var row = Math.floor(state.focus / COLS);
       var rowTop = function (r) { var t = tiles[r * COLS]; return t ? t.offsetTop : 0; };
       var first = Math.min(state.firstRow || 0, row);
-      while (first < row && el.offsetTop + el.offsetHeight - rowTop(first) + 30 > shelf.clientHeight) first++;
+      while (first < row && el.offsetTop + el.offsetHeight - rowTop(first) + 6 > shelf.clientHeight) first++;
       state.firstRow = first;
       grid.style.transform = "translateY(" + (first ? -(rowTop(first) - rowTop(0)) : 0) + "px)";
     } else if (!tiles.length) grid.style.transform = "translateY(0px)";
