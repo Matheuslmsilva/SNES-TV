@@ -505,3 +505,25 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 .tile { width: 33.333%; }
 .tile .badge.pl { background: rgba(58,99,200,0.35); color: #cfe0ff; }
 .det-desc { white-space: pre-line; }
+
+/* painel do jogo compacto: nome, ano/empresa/gênero, história e a barra no fim */
+.details.game .det-cover { width: 7.5rem; margin-right: 1.2rem; }
+.details.game .det-title { font-size: 1.45rem; }
+.det-info { color: #e8b71f; font-size: 0.95rem; font-weight: 700; margin-top: 0.4rem; line-height: 1.35; }
+.details.game .det-meta { font-size: 0.85rem; margin-top: 0.3rem; }
+.det-story { margin: 1.1rem 0 0; color: #cbc6d6; font-size: 0.98rem; line-height: 1.5; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 9; -webkit-box-orient: vertical; }
+.det-src { color: #6f6a7d; font-size: 0.75rem; margin-top: 0.35rem; }
+.details.game .det-del { margin-top: 0.6rem; font-size: 0.85rem; }
+.details.game .det-ach-box { margin-top: auto; padding-top: 0.8rem; }
+.details.game .det-ach-head { margin: 0 0 0.5rem; }
+.details.game .det-ach-head b { font-size: 1rem; color: #b9adff; }
+.details.game .det-bar { height: 0.55rem; margin-bottom: 0; background: rgba(255,255,255,0.08); }
+.details.game .det-bar i { background: rgba(232,183,31,0.75); }
+
+/* assistente: escolher o modelo do controle */
+.wiz-models { display: -webkit-flex; display: flex; -webkit-justify-content: center; justify-content: center; -webkit-flex-wrap: wrap; flex-wrap: wrap; margin: 0.6rem 0 0.2rem; }
+.wiz-models span { padding: 0.4rem 1rem; margin: 0.2rem; border-radius: 0.6rem; background: rgba(255,255,255,0.06); color: #b8b2c6; font-weight: 700; cursor: pointer; border: 2px solid transparent; }
+.wiz-models span.on { background: #5b4bd6; color: #fff; border-color: #b9adff; }
+.snes-pad .sp-labels text { fill: #fff; font-size: 17px; font-weight: 800; text-anchor: middle; pointer-events: none; font-family: inherit; }
+.snes-pad .sp-labels text.sm { font-size: 9px; fill: #3a3546; }

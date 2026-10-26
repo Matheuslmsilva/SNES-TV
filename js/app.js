@@ -1314,7 +1314,9 @@
       if (isBack(c) || c === K.ENTER) closePair();
       else if (c === K.RED || c === 82) { stopCtrl(); toast("Celulares desconectados", 2000); closePair(); }
     } else if (state.view === "wizard") {
-      if (isBack(c)) closeWizard(false);
+      if (c === K.LEFT) wizModel(-1);
+      else if (c === K.RIGHT) wizModel(1);
+      else if (isBack(c)) closeWizard(false);
       else if (c === K.ENTER) wizardSkip();
       else if (c === K.RED || c === 82 /* R */) wizardReset();
     }
@@ -1658,14 +1660,41 @@
   }
 
   // ---------------- Assistente: configurar joystick genérico ----------------
+  // modelos: nome de cada botão na posição do SNES (baixo, direita, esquerda, cima, L, R, select, start)
+  var WIZ_MODELS = {
+    snes:   { n: "SNES",        k: ["B", "A", "Y", "X", "L", "R", "SELECT", "START"], c: ["#e8b71f", "#d6383c", "#2f9a4e", "#3a63c8"] },
+    xbox:   { n: "Xbox",        k: ["A", "B", "X", "Y", "LB", "RB", "⧉ Exibir", "☰ Menu"], c: ["#3e9a3a", "#c8352f", "#2f6fd0", "#e8b71f"] },
+    ps:     { n: "PlayStation", k: ["✕", "○", "□", "△", "L1", "R1", "SHARE", "OPTIONS"], c: ["#7fa7ff", "#ff7a7a", "#ff8fd8", "#5fe0b8"], dark: true },
+    switch: { n: "Switch",      k: ["B", "A", "Y", "X", "L", "R", "−", "+"], c: ["#555", "#555", "#555", "#555"] },
+    generic:{ n: "Genérico 1-2-3-4", k: ["3", "2", "4", "1", "L1", "R1", "SELECT", "START"], c: ["#666", "#666", "#666", "#666"] }
+  };
+  var WIZ_ORDER = ["snes", "xbox", "ps", "switch", "generic"];
+  var WIZ_POS = ["embaixo", "à direita", "à esquerda", "em cima", "ombro esquerdo", "ombro direito", "", ""];
+  var WIZ_BTN = [BTN.B, BTN.A, BTN.Y, BTN.X, BTN.L, BTN.R, BTN.SELECT, BTN.START];
   var WIZ = [
     [BTN.UP, "CIMA no direcional"], [BTN.DOWN, "BAIXO no direcional"],
     [BTN.LEFT, "ESQUERDA no direcional"], [BTN.RIGHT, "DIREITA no direcional"],
-    [BTN.B, "o botão B (embaixo)"], [BTN.A, "o botão A (direita)"],
-    [BTN.Y, "o botão Y (esquerda)"], [BTN.X, "o botão X (em cima)"],
-    [BTN.L, "o botão L (ombro esquerdo)"], [BTN.R, "o botão R (ombro direito)"],
-    [BTN.SELECT, "SELECT"], [BTN.START, "START"]
+    [BTN.B, 0], [BTN.A, 1], [BTN.Y, 2], [BTN.X, 3], [BTN.L, 4], [BTN.R, 5], [BTN.SELECT, 6], [BTN.START, 7]
   ];
+  function wizLabel(step) {
+    if (typeof step[1] === "string") return step[1];
+    var m = WIZ_MODELS[wiz.model] || WIZ_MODELS.snes, i = step[1];
+    var name = m.k[i], pos = WIZ_POS[i];
+    return (i >= 6 ? name : "o botão " + name) + (pos ? " (" + pos + ")" : "") + (wiz.model !== "snes" ? " — vira o " + ["B", "A", "Y", "X", "L", "R", "SELECT", "START"][i] + " do SNES" : "");
+  }
+  function wizGuessModel(p) {
+    var t = p ? padType(p) : "generic", au = p ? autoEntry(p) : null, id = String((p && p.id) || "") + " " + (au ? au.n : "");
+    if (t === "xbox" || /xbox|x-box|360|xinput/i.test(id)) return "xbox";
+    if (t === "ps" || /playstation|dualshock|ps[345]/i.test(id)) return "ps";
+    if (/switch|joy-?con|pro controller|nintendo/i.test(id)) return "switch";
+    if (/8bitdo|snes|super famicom|retro/i.test(id)) return "snes";
+    return "snes";
+  }
+  function wizModel(d) {
+    var i = WIZ_ORDER.indexOf(wiz.model);
+    wiz.model = WIZ_ORDER[(i + d + WIZ_ORDER.length) % WIZ_ORDER.length];
+    paintWizard();
+  }
   var WIZ_PART = {}; // botão → id da peça no desenho
   WIZ_PART[BTN.UP] = "sp-up"; WIZ_PART[BTN.DOWN] = "sp-down"; WIZ_PART[BTN.LEFT] = "sp-left"; WIZ_PART[BTN.RIGHT] = "sp-right";
   WIZ_PART[BTN.B] = "sp-b"; WIZ_PART[BTN.A] = "sp-a"; WIZ_PART[BTN.Y] = "sp-y"; WIZ_PART[BTN.X] = "sp-x";
@@ -1678,7 +1707,7 @@
       toast("Nenhum joystick encontrado. Conecte por USB ou Bluetooth e aperte qualquer botão nele.", 4000);
       return;
     }
-    wiz = { step: 0, pad: null, padId: null, map: {}, rest: null, wait: true };
+    wiz = { step: 0, pad: null, padId: null, map: {}, rest: null, wait: true, model: wizGuessModel(pads[0]) };
     state.view = "wizard";
     $("wizard").hidden = false;
     paintWizard();
@@ -1696,7 +1725,19 @@
   function paintWizard(msg) {
     var step = WIZ[wiz.step];
     $("wiz-pad").textContent = wiz.padName ? wiz.padName : "Aperte o botão pedido no joystick que você quer configurar";
-    $("wiz-ask").textContent = step ? "Aperte " + step[1] : "";
+    $("wiz-ask").textContent = step ? "Aperte " + wizLabel(step) : "";
+    // modelos (◀ ▶) e desenho com os nomes do modelo escolhido
+    var mb = $("wiz-models"), mm = WIZ_MODELS[wiz.model];
+    mb.innerHTML = "";
+    WIZ_ORDER.forEach(function (k) {
+      var sp = document.createElement("span");
+      sp.textContent = WIZ_MODELS[k].n;
+      if (k === wiz.model) sp.className = "on";
+      sp.addEventListener("click", function () { wiz.model = k; paintWizard(); });
+      mb.appendChild(sp);
+    });
+    ["b", "a", "y", "x", "l", "r", "select", "start"].forEach(function (id, i) { $("st-" + id).textContent = mm.k[i]; });
+    ["b", "a", "y", "x"].forEach(function (id, i) { $("sp-" + id).style.fill = wiz.map[WIZ_BTN[i]] !== undefined || (step && step[0] === WIZ_BTN[i]) ? "" : mm.c[i]; });
     $("wiz-msg").textContent = msg || "";
     $("wiz-progress").textContent = (wiz.step + 1) + " de " + WIZ.length;
     Object.keys(WIZ_PART).forEach(function (b) {
@@ -1752,7 +1793,9 @@
     if (!wiz.padId) { closeWizard(false); return; }
     try { localStorage.setItem("snestv.pad." + wiz.padId, JSON.stringify(wiz.map)); } catch (e) {}
     mapCache = {};
-    toast("🎮 " + wiz.padName + " configurado!", 2600);
+    // o modelo escolhido também vale para as dicas de botões na lateral
+    if (/^(snes|xbox|ps)$/.test(wiz.model)) { try { localStorage.setItem("snestv.padmodel", wiz.model); } catch (e) {} }
+    toast("🎮 " + wiz.padName + " configurado (" + WIZ_MODELS[wiz.model].n + ")!", 2600);
     closeWizard(true);
   }
 
@@ -2460,6 +2503,15 @@
     $("det-desc").textContent = g.action ? (g.sideKey && SIDE_INFO[g.sideKey]) || (/^sec:/.test(g.action) ? SIDE_INFO[g.action.slice(4)] + "\n\n" + sectionCount(g.action.slice(4)) + " jogos nesta seção." : "") || ACTION_INFO[g.action] || "" : "";
     $("det-del").hidden = !canDelete(g);
     $("det-desc").hidden = !g.action;
+    // jogo: ano · empresa · gênero · jogadores, e a história (Wikipédia)
+    $("details").classList.toggle("game", !g.action);
+    if (!g.action) {
+      var inf = gameInfo(g, cn), pl = playersOf(g), parts = [];
+      if (inf) { if (inf[0]) parts.push(inf[0]); if (inf[1]) parts.push(inf[1]); if (inf[2]) parts.push(inf[2]); }
+      if (pl >= 2) parts.push("👥 " + pl + " jogadores");
+      $("det-info").textContent = parts.join(" · ");
+      showStory(g, title);
+    } else { $("det-info").textContent = ""; $("det-story").hidden = true; $("det-src").hidden = true; }
 
     // conquistas: as da comunidade (RetroAchievements) + as do SNES TV
     var gk = g.action ? null : Conquistas.gameFor(cn, g.title, g.name);
@@ -2489,9 +2541,12 @@
     var got = list.filter(function (d) { return d.on; }).length, total = list.length;
     // o servidor pode saber de desbloqueios que a lista guardada ainda não tem
     if (pr && pr.total && list.length && head !== "Conquistas gerais") { got = Math.max(got, pr.got); total = Math.max(total, pr.total); }
-    $("det-ach-title").textContent = head;
+    $("det-ach-title").textContent = g.action ? head : (head === "Conquistas gerais" ? "Conquistas gerais" : "Conquistas");
     $("det-ach-count").textContent = "★ " + got + "/" + total;
     $("det-bar").style.width = Math.round(got / Math.max(1, total) * 100) + "%";
+    // jogo: só a barra de progresso (a lista completa fica na tela Conquistas)
+    ul.hidden = !g.action;
+    if (!g.action) return;
     if (note) {
       var li0 = document.createElement("li");
       li0.className = "det-note";
@@ -2520,6 +2575,70 @@
       more.textContent = "+ mais " + hidden + " — veja todas no menu Conquistas";
       ul.appendChild(more);
     }
+  }
+
+  // ---------- ano, empresa e gênero (libretro-database) ----------
+  var GINFO = null;
+  function loadGameInfo() {
+    return snesGet("gameinfo.json", "text").then(function (t) { try { GINFO = JSON.parse(t); } catch (e) {} }, function () {});
+  }
+  function gameInfo(g, cn) {
+    if (!GINFO) return null;
+    return (cn && GINFO[normTitle(cn)]) || GINFO[normTitle(g.title)] || null;
+  }
+
+  // ---------- história do jogo (resumo da Wikipédia, guardado na TV) ----------
+  var STORY = null, storyTimer = null, storyBusy = false;
+  function storyCache() {
+    if (!STORY) { try { STORY = JSON.parse(localStorage.getItem("snestv.story") || "{}"); } catch (e) { STORY = {}; } }
+    return STORY;
+  }
+  function storySave() { try { localStorage.setItem("snestv.story", JSON.stringify(STORY)); } catch (e) { STORY = {}; } }
+  function showStory(g, title) {
+    var k = normTitle(title), c = storyCache()[k], el = $("det-story"), src = $("det-src");
+    clearTimeout(storyTimer);
+    el.hidden = false;
+    if (c && c.x) { el.textContent = c.x; src.hidden = false; src.textContent = "Wikipédia" + (c.l === "en" ? " (em inglês)" : ""); return; }
+    src.hidden = true;
+    if (c && Date.now() - c.at < 7 * 86400000) { el.textContent = "Sem resumo disponível para este jogo."; return; }
+    el.textContent = "Carregando a história do jogo…";
+    // só busca se o foco ficar no jogo (não pesa ao passar rápido pela lista)
+    var want = detKey;
+    storyTimer = setTimeout(function () {
+      fetchStory(title).then(function (r) {
+        storyCache()[k] = r ? { x: r.x, l: r.l, t: r.t } : { at: Date.now() };
+        storySave();
+        if (detKey === want) showStory(g, title);
+      });
+    }, 650);
+  }
+  function wikiQuery(lang, q) {
+    var url = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&generator=search&gsrlimit=4" +
+      "&prop=extracts&exintro=1&explaintext=1&exsentences=4&gsrsearch=" + encodeURIComponent(q);
+    return snesGet(url, "text").then(function (t) {
+      var j = JSON.parse(t), pages = j.query && j.query.pages ? j.query.pages : {};
+      return Object.keys(pages).map(function (id) { return pages[id]; }).sort(function (a, b) { return (a.index || 0) - (b.index || 0); });
+    });
+  }
+  function fetchStory(title) {
+    if (storyBusy) return Promise.resolve(null);
+    storyBusy = true;
+    var want = normTitle(title);
+    function pick(list, lang) {
+      var best = null, bs = 0;
+      list.forEach(function (p) {
+        var n = normTitle(String(p.title || "").replace(/\s*\((jogo eletrônico|videojogo|video game|[^)]*game)\)/i, ""));
+        var sc = n === want ? 1 : n.indexOf(want) === 0 || want.indexOf(n) === 0 ? 0.85 : dice(n, want);
+        if (sc > bs && p.extract && p.extract.length > 60) { bs = sc; best = p; }
+      });
+      if (!best || bs < 0.6) return null;
+      var x = best.extract.replace(/\s+/g, " ").trim();
+      if (x.length > 420) x = x.slice(0, 420).replace(/\s+\S*$/, "") + "…";
+      return { x: x, l: lang, t: best.title };
+    }
+    return wikiQuery("pt", title + " jogo Super Nintendo").then(function (l) { return pick(l, "pt"); })
+      .then(function (r) { return r || wikiQuery("en", title + " Super NES video game").then(function (l) { return pick(l, "en"); }); })
+      .then(function (r) { storyBusy = false; return r; }, function () { storyBusy = false; return null; });
   }
 
   // progresso de conquistas de um jogo (comunidade + SNES TV)
@@ -3390,7 +3509,7 @@
     if (!userName()) setTimeout(openName, 300);
     showDeviceInfo();
     if (ctrlEnabled()) startCtrl();
-    Promise.all([loadCovers(), loadPlayers()]).then(function () { if (state.view === "launcher" && state.items) renderGrid(); });
+    Promise.all([loadCovers(), loadPlayers(), loadGameInfo()]).then(function () { if (state.view === "launcher" && state.items) renderGrid(); });
     refresh(true);
     requestAnimationFrame(pollPads);
 

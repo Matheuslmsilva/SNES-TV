@@ -61,12 +61,15 @@
         <div class="det-cover"><div class="cart"><div class="shell"><div class="cart-label" id="det-label"><span id="det-initial"></span></div></div></div></div>
         <div class="det-text">
           <h2 id="det-title" class="det-title"></h2>
+          <div id="det-info" class="det-info"></div>
           <div id="det-meta" class="det-meta"></div>
         </div>
       </div>
       <div id="det-desc" class="det-desc"></div>
+      <p id="det-story" class="det-story" hidden></p>
+      <div id="det-src" class="det-src" hidden></div>
       <div id="det-del" class="det-del" hidden><kbd class="key-dot c-b"></kbd> Excluir jogo</div>
-      <div id="det-ach-box">
+      <div id="det-ach-box" class="det-ach-box">
         <div class="det-ach-head"><b id="det-ach-title">Conquistas</b><span id="det-ach-count"></span></div>
         <div class="det-bar"><i id="det-bar"></i></div>
       </div>
@@ -234,7 +237,8 @@
 <!-- ============ CONFIGURAR JOYSTICK ============ -->
 <div id="wizard" class="overlay" hidden>
   <div class="panel wiz">
-    <h2>Configurar joystick</h2>
+    <h2>Configurar controle</h2>
+    <div class="wiz-models" id="wiz-models"></div>
     <p id="wiz-pad" class="muted"></p>
     <svg class="snes-pad" viewBox="0 0 420 200" aria-hidden="true">
       <rect id="sp-l" class="part" x="40" y="12" width="110" height="26" rx="12"/>
@@ -251,11 +255,17 @@
       <circle id="sp-a" class="part btn c-af" cx="350" cy="117" r="19"/>
       <circle id="sp-b" class="part btn c-bf" cx="312" cy="152" r="19"/>
       <circle id="sp-y" class="part btn c-yf" cx="274" cy="117" r="19"/>
+      <g class="sp-labels">
+        <text id="st-x" x="312" y="88">X</text><text id="st-a" x="350" y="123">A</text>
+        <text id="st-b" x="312" y="158">B</text><text id="st-y" x="274" y="123">Y</text>
+        <text id="st-l" x="95" y="30">L</text><text id="st-r" x="325" y="30">R</text>
+        <text id="st-select" x="182" y="152" class="sm">SELECT</text><text id="st-start" x="236" y="152" class="sm">START</text>
+      </g>
     </svg>
     <p id="wiz-ask" class="wiz-ask"></p>
     <p id="wiz-msg" class="wiz-msg"></p>
     <p class="muted small center"><span id="wiz-progress"></span> ·
-      <kbd>OK</kbd> pular este botão · <kbd class="key-dot c-a"></kbd> voltar ao padrão · <kbd>VOLTAR</kbd> cancelar</p>
+      <kbd>◀ ▶</kbd> modelo do controle · <kbd>OK</kbd> pular este botão · <kbd class="key-dot c-a"></kbd> voltar ao padrão · <kbd>VOLTAR</kbd> cancelar</p>
   </div>
 </div>
 
