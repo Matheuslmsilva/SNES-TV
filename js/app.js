@@ -2751,12 +2751,12 @@
 
     var meta = [];
     if (!g.action) {
-      if (g.region) meta.push(g.region);
+      if (g.region) meta.push({ J: "Japão", U: "EUA", USA: "EUA", E: "Europa", Europe: "Europa", Japan: "Japão", B: "Brasil", Brazil: "Brasil", W: "Mundo", World: "Mundo" }[g.region] || g.region);
       if (g.size) meta.push(fmtSize(g.size));
-      meta.push(g.source === "usb" ? "Pen drive" : g.source === "pc" ? "Pasta do PC" : g.source === "drive" ? "Google Drive (baixa ao jogar)" : g.fromDrive ? "Do Google Drive, salvo na TV" : "Salvo na TV");
-      if (g.last) meta.push("último jogado");
+      meta.push(g.source === "usb" ? "Pen drive" : g.source === "pc" ? "PC" : g.source === "drive" ? "☁ Drive" : g.fromDrive ? "Drive ✓" : "Na TV");
+      if (g.last) meta.push("▶ último jogado");
     }
-    $("det-meta").textContent = meta.join(" · ");
+    chips($("det-meta"), meta, "");
     $("det-desc").textContent = g.action ? (g.sideKey && SIDE_INFO[g.sideKey]) || (/^sec:/.test(g.action) ? SIDE_INFO[g.action.slice(4)] + "\n\n" + sectionCount(g.action.slice(4)) + " jogos nesta seção." : "") || ACTION_INFO[g.action] || "" : "";
     $("det-del").hidden = !canDelete(g);
     $("det-desc").hidden = !g.action;
@@ -2766,7 +2766,7 @@
       var inf = gameInfo(g, cn), pl = playersOf(g), parts = [];
       if (inf) { if (inf[0]) parts.push(inf[0]); if (inf[1]) parts.push(inf[1]); if (inf[2]) parts.push(inf[2]); }
       if (pl >= 2) parts.push("👥 " + pl + " jogadores");
-      $("det-info").textContent = parts.join(" · ");
+      chips($("det-info"), parts, "hl");
       showStory(g, title);
     } else { $("det-info").textContent = ""; $("det-story").hidden = true; $("det-src").hidden = true; }
 
@@ -2824,6 +2824,19 @@
     }
   }
 
+  // etiquetas pequenas (ano, gênero, região, tamanho…)
+  function chips(box, list, cls) {
+    box.innerHTML = "";
+    list.forEach(function (t) {
+      if (!t) return;
+      var sp = document.createElement("span");
+      sp.className = "chip-i" + (cls ? " " + cls : "");
+      sp.textContent = t;
+      box.appendChild(sp);
+    });
+    box.hidden = !box.children.length;
+  }
+
   // ---------- ano, empresa e gênero (libretro-database) ----------
   var GINFO = null;
   function loadGameInfo() {
@@ -2847,7 +2860,7 @@
     el.hidden = false;
     if (c && c.x) { el.textContent = c.x; src.hidden = false; src.textContent = "Wikipédia" + (c.l === "en" ? " (em inglês)" : ""); return; }
     src.hidden = true;
-    if (c && Date.now() - c.at < 7 * 86400000) { el.textContent = "Sem resumo disponível para este jogo."; return; }
+    if (c && Date.now() - c.at < 7 * 86400000) { el.hidden = true; return; }   // sem resumo: não ocupa espaço
     el.textContent = "Carregando a história do jogo…";
     // só busca se o foco ficar no jogo (não pesa ao passar rápido pela lista)
     var want = detKey;

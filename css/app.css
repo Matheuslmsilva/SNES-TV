@@ -628,3 +628,23 @@ kbd.key-dot { min-width: 1.2rem; width: 1.2rem; height: 1.2rem; padding: 0; bord
 .slot span { display: block; font-size: 0.85rem; color: #9a94a8; margin-top: 0.15rem; }
 .slot.focused { border-color: #b9adff; background: rgba(91,75,214,0.3); -webkit-transform: scale(1.04); transform: scale(1.04); }
 .slot.focused span { color: #e5e0ff; }
+
+/* ---------- painel do jogo: compacto e organizado ---------- */
+.details { -webkit-align-self: flex-start; align-self: flex-start; max-height: calc(100% - 2rem); }
+.details.game .det-top, .details .det-top { -webkit-flex-direction: row; flex-direction: row; -webkit-align-items: center; align-items: center; }
+.details.game .det-cover, .details .det-cover { width: 4.6rem; margin: 0 0.9rem 0 0; }
+.details .det-title, .details.game .det-title { font-size: 1.12rem; line-height: 1.22; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.det-info, .details.game .det-meta, .det-meta { display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; margin: 0; }
+.det-info { margin-top: 0.8rem; }
+.details.game .det-meta { margin-top: 0.35rem; }
+.chip-i { font-size: 0.74rem; font-weight: 700; color: #b8b2c6; background: rgba(255,255,255,0.07); border-radius: 0.4rem; padding: 0.18rem 0.5rem; margin: 0 0.3rem 0.3rem 0; white-space: nowrap; }
+.chip-i.hl { color: #f2d36b; background: rgba(232,183,31,0.13); }
+.det-story { margin-top: 0.6rem; font-size: 0.84rem; -webkit-line-clamp: 7; color: #c3bdd0; }
+.det-src { margin-top: 0.2rem; }
+.details.game .det-ach-box { margin-top: 0.9rem; padding-top: 0.7rem; border-top: 1px solid rgba(255,255,255,0.07); }
+.det-actions { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; margin-top: 0.9rem; padding-top: 0.7rem; border-top: 1px solid rgba(255,255,255,0.07); font-size: 0.82rem; color: #9a94a8; }
+.det-actions span { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; margin-right: 1.1rem; }
+.det-actions kbd { margin-right: 0.4rem; }
+.det-actions .key-dot { width: 0.9rem; height: 0.9rem; }
+.details:not(.game) .det-actions { display: none; }
+.det-actions .key-dot { padding: 0; min-width: 0; border: 0; border-radius: 50%; display: inline-block; }
